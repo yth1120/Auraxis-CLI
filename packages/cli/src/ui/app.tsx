@@ -8,6 +8,7 @@ import {
   loadRuntimeConfig,
   loadMcpServers,
   McpManager,
+  scanSkills,
   runAgent,
   SecretStore,
   SessionStore,
@@ -328,7 +329,7 @@ function App({ options }: { options: CliOptions }) {
       if (command === 'help') {
         addItem({
           kind: 'system',
-          text: '/help /clear /quit /status /model <id> /mode <ask|plan|auto> /sandbox <mode> /deep-think <on|off> /theme <dark|light|neon|mono> /api-key <key> /tools /sessions /history\nPgUp/PgDn 浏览历史 · Ctrl+T 展开思考 · Ctrl+C 取消',
+          text: '/help /clear /quit /status /model <id> /mode <ask|plan|auto> /sandbox <mode> /deep-think <on|off> /theme <dark|light|neon|mono> /api-key <key> /tools /skills /mcp /doctor /sessions /history\nPgUp/PgDn 浏览历史 · Ctrl+T 展开思考 · Ctrl+C 取消',
         });
       } else if (command === 'clear') {
         setEntries([]);
@@ -341,6 +342,34 @@ function App({ options }: { options: CliOptions }) {
         addItem({ kind: 'system', text: getTools().map((tool) => `${tool.name} [${tool.danger}]`).join('\n') });
       } else if (command === 'history') {
         addItem({ kind: 'system', text: history.length ? history.slice(-20).join('\n') : '暂无历史命令' });
+      } else if (command === 'mcp') {
+        const manager = mcpRef.current;
+        const tools = manager?.getToolDefinitions() || [];
+        addItem({
+          kind: 'system',
+          text: tools.length
+            ? tools.map((tool) => `${tool.name} · ${tool.mcpServer || 'MCP'}`).join('\n')
+            : '尚未连接 MCP 服务',
+        });
+      } else if (command === 'skills') {
+        void (async () => {
+          const skills = await scanSkills(options.project ? path.resolve(options.project) : process.cwd());
+          addItem({
+            kind: 'system',
+            text: skills.length
+              ? skills.map((skill) => `${skill.id} · ${skill.name}${skill.description ? ` — ${skill.description}` : ''}`).join('\n')
+              : '暂无技能',
+          });
+        })();
+      } else if (command === 'doctor') {
+        void (async () => {
+          const manager = mcpRef.current;
+          const skills = await scanSkills(options.project ? path.resolve(options.project) : process.cwd());
+          addItem({
+            kind: 'system',
+            text: `模型: ${model}\n模式: ${mode}\n沙箱: ${sandbox}\n工具: ${getTools().length + (manager?.getToolDefinitions().length || 0)}\n技能: ${skills.length}\nMCP: ${manager?.getToolDefinitions().length || 0}`,
+          });
+        })();
       } else if (command === 'sessions') {
         void (async () => {
           const store = new SessionStore({ dir: getAppPaths().sessionsDir });
