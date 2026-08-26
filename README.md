@@ -55,6 +55,26 @@ auraxis doctor                   # 检查配置
 
 MCP 工具会自动出现在 Agent 工具列表中，并在执行前经过同样的权限审批。
 
+## 终端交互
+
+```text
+/theme dark|light|neon|mono
+/skills
+/mcp
+/doctor
+/sessions
+/session <id>
+```
+
+快捷键:
+
+```text
+Ctrl+T      展开/收起思考
+PgUp/PgDn   浏览历史
+Ctrl+C      取消当前任务，再按一次退出
+方向键       命令历史
+```
+
 ## 架构
 
 ```text
