@@ -588,9 +588,6 @@ export function HomeCard({
                 {' '}(v{version})
               </Text>
             </Box>
-            <Text color={theme.muted}>
-              智能协作 · 代码理解 · 自动化执行
-            </Text>
             <Text color={theme.text}>
               Tips: 输入自然语言开始对话，或使用 / 命令
             </Text>
