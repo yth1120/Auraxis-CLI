@@ -44,14 +44,29 @@ export function Panel({
   color = 'cyan',
   border = 'round',
   children,
+  width,
+  marginLeft,
+  flexGrow,
 }: {
   title?: string;
   color?: string;
   border?: BorderStyle;
   children?: ReactNode;
+  width?: number;
+  marginLeft?: number;
+  flexGrow?: number;
 }) {
   return (
-    <Box borderStyle={border} borderColor={color} paddingX={1} paddingY={0} flexDirection="column">
+    <Box
+      borderStyle={border}
+      borderColor={color}
+      paddingX={1}
+      paddingY={0}
+      flexDirection="column"
+      width={width}
+      marginLeft={marginLeft}
+      flexGrow={flexGrow}
+    >
       {title ? (
         <Text color={color} bold>
           {title}
@@ -576,7 +591,7 @@ function CommandChip({
     <Box
       borderStyle="round"
       borderColor={selected ? theme.brand : theme.muted}
-      paddingX={1}
+      paddingX={0}
       marginRight={1}
     >
       <Text color={selected ? theme.brand : theme.info} bold={selected} wrap="wrap">
@@ -631,42 +646,39 @@ export function HomeCard({
 
   return (
     <Box flexDirection="column">
-      <Panel color={theme.brand} border="round">
-        <Box flexDirection="row">
-          <Box flexDirection="column" flexGrow={1}>
-            <Box flexDirection="row" justifyContent="space-between">
-              <Text color={theme.brand} bold>
-                ❯_ Auraxis Agent CLI
-              </Text>
-            </Box>
-            <Box flexDirection="row" marginTop={1}>
-              {commands.map((command, index) => (
-                <CommandChip
-                  key={command.command}
-                  icon={command.icon}
-                  label={command.command}
-                  selected={homeFocus === 'commands' && selectedCommand === index}
-                />
-              ))}
-            </Box>
-            <Box marginTop={1}>
-              <Text color={theme.muted}>
-                Tab 切换命令 · ← → 选择 · Enter 执行 · 1-5 直达
-              </Text>
-            </Box>
+      <Box flexDirection="row">
+        <Panel color={theme.brand} border="round" flexGrow={1}>
+          <Box flexDirection="row" justifyContent="space-between">
+            <Text color={theme.brand} bold>
+              ❯_ Auraxis Agent CLI
+            </Text>
           </Box>
-          <Text color={theme.muted}>
-            {'│\n│\n│\n│\n│'}
-          </Text>
-          <Box flexDirection="column" marginLeft={2}>
+          <Box flexDirection="row" marginTop={1}>
+            {commands.map((command, index) => (
+              <CommandChip
+                key={command.command}
+                icon={command.icon}
+                label={command.command}
+                selected={homeFocus === 'commands' && selectedCommand === index}
+              />
+            ))}
+          </Box>
+          <Box marginTop={1}>
+            <Text color={theme.muted}>
+              Tab 切换命令 · ← → 选择 · Enter 执行 · 1-5 直达
+            </Text>
+          </Box>
+        </Panel>
+        <Panel color={theme.brand} border="round" width={26} marginLeft={1}>
+          <Box flexDirection="column">
             <Text color={theme.muted}>{displayProject}</Text>
             <Text color={theme.muted}>{branch}</Text>
             <Text color={theme.muted}>{model}</Text>
             <Text color={theme.muted}>{appMode.toUpperCase()}</Text>
             <Text color={theme.brand}>{formatSessionTime(sessionSeconds)}</Text>
           </Box>
-        </Box>
-      </Panel>
+        </Panel>
+      </Box>
       <PromptBar input={input} running={running} />
     </Box>
   );
