@@ -118,10 +118,17 @@ export function PromptBar({ input, running }: { input: string; running: boolean 
   const theme = useTheme();
   const { stdout } = useStdout();
   const columns = stdout.columns || 80;
+  const [cursorOn, setCursorOn] = useState(true);
+  useEffect(() => {
+    if (running) return;
+    const timer = setInterval(() => setCursorOn((current) => !current), 500);
+    return () => clearInterval(timer);
+  }, [running]);
   const maxInput = Math.max(12, columns - 8);
   const raw = input || (running ? '执行中 · Ctrl+C 取消' : '输入任务 · /help 查看命令');
   const oneLine = raw.replace(/\r?\n/g, '⏎');
   const display = oneLine.length > maxInput ? `${oneLine.slice(0, maxInput - 1)}…` : oneLine;
+  const caret = running ? '' : cursorOn ? '▌' : ' ';
   return (
     <Panel color={running ? theme.warning : theme.success} border="single">
       <Box flexDirection="row">
@@ -131,6 +138,7 @@ export function PromptBar({ input, running }: { input: string; running: boolean 
         <Text color={running ? theme.warning : theme.text} wrap="truncate">
           {' '}
           {display}
+          {caret}
         </Text>
       </Box>
     </Panel>
