@@ -412,18 +412,26 @@ function formatSessionTime(seconds: number): string {
 }
 
 function QuickStartCard({
+  icon = '',
   command,
   description,
+  width,
 }: {
+  icon?: string;
   command: string;
   description: string;
+  width?: number;
 }) {
   const theme = useTheme();
   return (
-    <Box width={14} borderStyle="round" borderColor={theme.muted} paddingX={1} flexDirection="column">
-      <Text color={theme.brand} bold wrap="truncate">
-        {command}
-      </Text>
+    <Box width={width} flexGrow={width ? 0 : 1} borderStyle="round" borderColor={theme.muted} paddingX={1} flexDirection="column">
+      <Box flexDirection="row">
+        <Text color={theme.brand}>{icon}</Text>
+        <Text color={theme.info} bold wrap="truncate">
+          {' '}
+          {command}
+        </Text>
+      </Box>
       <Text color={theme.text} dimColor wrap="truncate">
         {description}
       </Text>
@@ -571,6 +579,13 @@ export function HomeCard({
     const timer = setInterval(() => setSessionSeconds((current) => current + 1), 1000);
     return () => clearInterval(timer);
   }, []);
+  const footerCommands = [
+    { icon: '💬', command: '/chat', description: '开始对话' },
+    { icon: '📦', command: '/init', description: '初始化项目' },
+    { icon: '⚡', command: '/run <file>', description: '运行文件' },
+    { icon: '⚙', command: '/config', description: '配置设置' },
+    { icon: '?', command: '/help', description: '查看更多命令' },
+  ];
 
   return (
     <Box flexDirection="column">
@@ -612,37 +627,24 @@ export function HomeCard({
         </Box>
       </Panel>
       <Panel color={theme.muted} border="single">
-        {wideFooter ? (
+        <Box flexDirection="column">
           <Box flexDirection="row">
-            <Text color={theme.info}>/chat</Text>
-            <Text color={theme.text}> 开始对话</Text>
-            <Text color={theme.info}>/init</Text>
-            <Text color={theme.text}> 初始化项目</Text>
-            <Text color={theme.info}>/run &lt;file&gt;</Text>
-            <Text color={theme.text}> 运行文件</Text>
-            <Text color={theme.info}>/config</Text>
-            <Text color={theme.text}> 配置设置</Text>
-            <Text color={theme.info}>/help</Text>
-            <Text color={theme.text}> 查看帮助</Text>
+            {wideFooter
+              ? footerCommands.map((command) => (
+                  <QuickStartCard key={command.command} {...command} width={20} />
+                ))
+              : footerCommands.slice(0, 3).map((command) => (
+                  <QuickStartCard key={command.command} {...command} width={24} />
+                ))}
           </Box>
-        ) : (
-          <Box flexDirection="column">
-            <Text>
-              <Text color={theme.info}>/chat</Text>
-              <Text color={theme.text}> 开始对话</Text>
-              <Text color={theme.info}>    /init</Text>
-              <Text color={theme.text}> 初始化项目</Text>
-              <Text color={theme.info}>    /run &lt;file&gt;</Text>
-              <Text color={theme.text}> 运行文件</Text>
-            </Text>
-            <Text>
-              <Text color={theme.info}>/config</Text>
-              <Text color={theme.text}> 配置设置</Text>
-              <Text color={theme.info}>    /help</Text>
-              <Text color={theme.text}> 查看帮助</Text>
-            </Text>
-          </Box>
-        )}
+          {!wideFooter ? (
+            <Box flexDirection="row" marginTop={1}>
+              {footerCommands.slice(3).map((command) => (
+                <QuickStartCard key={command.command} {...command} width={34} />
+              ))}
+            </Box>
+          ) : null}
+        </Box>
       </Panel>
       <PromptBar input={input} running={running} />
     </Box>
