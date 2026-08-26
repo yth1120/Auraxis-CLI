@@ -2,25 +2,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { Box, Text, useStdout } from 'ink';
 import os from 'node:os';
 import type { PermissionRequest, Plan } from '@auraxis/core';
-import { LOGO_PIXELS } from './logo-pixels.js';
 
 type BorderStyle = 'round' | 'single' | 'double';
-
-function PixelLogo() {
-  return (
-    <Box flexDirection="column">
-      {LOGO_PIXELS.map((row, rowIndex) => (
-        <Box key={rowIndex} flexDirection="row">
-          {row.map((pixel, colIndex) => (
-            <Text key={colIndex} color={pixel.top} backgroundColor={pixel.bottom}>
-              ▀
-            </Text>
-          ))}
-        </Box>
-      ))}
-    </Box>
-  );
-}
 
 export type ThemeName = 'dark' | 'light' | 'neon' | 'mono';
 
@@ -611,7 +594,9 @@ export function HomeCard({
         <Box flexDirection="row">
           <Box flexDirection="column" flexGrow={1}>
             <Box flexDirection="row" alignItems="flex-start">
-              <PixelLogo />
+              <Text color={theme.info} bold>
+                ❯_
+              </Text>
               <Box flexDirection="column" marginLeft={1}>
                 <Text color={theme.brand} bold>
                   Auraxis
