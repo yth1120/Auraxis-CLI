@@ -5,6 +5,7 @@ export interface CliOptions {
   project?: string;
   model?: string;
   apiKey?: string;
+  setApiKey?: string;
   apiBase?: string;
   mode?: string;
   sandbox?: string;
@@ -44,6 +45,7 @@ export function parseArgs(argv: string[]): CliOptions {
     project: valueOf(argv, '--project') || valueOf(argv, '--cwd'),
     model: valueOf(argv, '--model'),
     apiKey: valueOf(argv, '--api-key'),
+    setApiKey: valueOf(argv, '--set-api-key'),
     apiBase: valueOf(argv, '--api-base'),
     mode,
     sandbox: valueOf(argv, '--sandbox'),
@@ -75,6 +77,7 @@ export function usage(): string {
     '  --project <dir>           项目目录',
     '  --model <id>              模型 ID',
     '  --api-key <key>           DeepSeek API Key',
+    '  --set-api-key <key>       加密保存 DeepSeek API Key',
     '  --api-base <url>          API 地址',
     '  --mode <ask|plan|auto>    审批策略',
     '  --sandbox <read|workspace-write|full>  沙箱策略',

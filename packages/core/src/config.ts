@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { ApprovalPolicy, ReasoningEffort, SandboxMode, ToolChoice } from './types.js';
+import type { ApprovalPolicy, McpServerConfig, ReasoningEffort, SandboxMode, ToolChoice } from './types.js';
 
 export const DEFAULT_API_BASE = 'https://api.deepseek.com/beta/chat/completions';
 
@@ -186,6 +186,50 @@ export async function saveRuntimeConfig(config: Partial<Omit<RuntimeConfig, 'api
   await fs.writeFile(path.join(paths.configDir, 'config.json'), `${JSON.stringify(next, null, 2)}\n`, 'utf8');
 }
 
+function parseMcpServers(raw: unknown): McpServerConfig[] {
+  const list = Array.isArray(raw) ? raw : raw && typeof raw === 'object' ? (raw as Record<string, unknown>).servers : undefined;
+  if (!Array.isArray(list)) return [];
+  const servers: McpServerConfig[] = [];
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue;
+    const value = item as Record<string, unknown>;
+    if (typeof value.name !== 'string' || typeof value.command !== 'string') continue;
+    servers.push({
+      name: value.name,
+      command: value.command,
+      args: Array.isArray(value.args) ? value.args.filter((arg): arg is string => typeof arg === 'string') : undefined,
+      env:
+        value.env && typeof value.env === 'object'
+          ? Object.fromEntries(
+              Object.entries(value.env as Record<string, unknown>).filter(([, v]) => typeof v === 'string'),
+            ) as Record<string, string>
+          : undefined,
+    });
+  }
+  return servers;
+}
+
+export async function loadMcpServers(projectRoot = process.cwd()): Promise<McpServerConfig[]> {
+  const paths = getAppPaths();
+  const globalFile = await readJson(path.join(paths.configDir, 'mcp.json'));
+  const projectFile = await readJson(path.join(projectRoot, '.auraxis', 'mcp.json'));
+  const projectConfig = await readJson(path.join(projectRoot, '.auraxis.json'));
+  const all = [
+    ...parseMcpServers(globalFile),
+    ...parseMcpServers(projectFile),
+    ...parseMcpServers(projectConfig.mcpServers),
+  ];
+  try {
+    const envRaw = process.env.AURAXIS_MCP_SERVERS;
+    if (envRaw) all.push(...parseMcpServers(JSON.parse(envRaw)));
+  } catch {
+    /* invalid env config ignored */
+  }
+  const map = new Map<string, McpServerConfig>();
+  for (const server of all) map.set(server.name, server);
+  return [...map.values()];
+}
+
 export function configIsMode(value: unknown): value is ApprovalPolicy {
   return value === 'ask' || value === 'plan' || value === 'auto';
 }
@@ -193,4 +237,3 @@ export function configIsMode(value: unknown): value is ApprovalPolicy {
 export function configIsSandbox(value: unknown): value is SandboxMode {
   return value === 'read' || value === 'workspace-write' || value === 'full';
 }
-

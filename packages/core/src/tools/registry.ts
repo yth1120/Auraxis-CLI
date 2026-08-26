@@ -1,5 +1,5 @@
 import type { AgentEvent } from '../events.js';
-import type { PlanTask, ToolDefinition, JsonObject } from '../types.js';
+import type { McpHost, PlanTask, ToolDefinition, JsonObject } from '../types.js';
 import { runFileTools, readFileTool, readImageFileTool, writeFileTool, editFileTool, grepTool, globTool } from './files.js';
 import { bashTool, pwshTool } from './shell.js';
 import { webFetchTool, webSearchTool } from './web.js';
@@ -12,6 +12,7 @@ export interface ToolContext {
   todos: PlanTask[];
   setTodos: (todos: PlanTask[]) => void;
   signal?: AbortSignal;
+  mcp?: McpHost;
 }
 
 export interface ToolOutput {

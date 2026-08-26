@@ -2,7 +2,19 @@
 
 import { parseArgs, usage } from './args.js';
 import { loadRuntimeConfig, getAppPaths, type RuntimeConfig } from '@auraxis/core';
-import { chatMessageText, SecretStore, SessionStore, getTools, runAgent, type AgentEvent, type ChatMessage, type SessionRecord } from '@auraxis/core';
+import {
+  chatMessageText,
+  SecretStore,
+  SessionStore,
+  getTools,
+  loadMcpServers,
+  McpManager,
+  runAgent,
+  type AgentEvent,
+  type ChatMessage,
+  type RunResult,
+  type SessionRecord,
+} from '@auraxis/core';
 import path from 'node:path';
 
 const VERSION = '0.1.0';
@@ -70,6 +82,11 @@ async function runHeadless(args: ReturnType<typeof parseArgs>): Promise<number> 
     return 2;
   }
   const store = makeSessionStore();
+  const mcpManager = new McpManager(await loadMcpServers(config.projectRoot));
+  await mcpManager.start();
+  for (const error of mcpManager.errors) {
+    process.stderr.write(`[MCP] ${error}\n`);
+  }
   const existing = args.session ? await store.load(args.session) : null;
   const session = existing || (await store.create(config.projectRoot, config.model));
   const resumeMessages: ChatMessage[] = existing ? existing.messages : [];
@@ -112,25 +129,31 @@ async function runHeadless(args: ReturnType<typeof parseArgs>): Promise<number> 
     return 'deny' as const;
   };
 
-  const result = await runAgent({
-    prompt: args.run || '',
-    projectRoot: config.projectRoot,
-    model: config.model,
-    apiKey,
-    apiBase: config.apiBase,
-    mode: config.mode,
-    sandboxMode: config.sandboxMode,
-    maxIterations: config.maxIterations,
-    deepThink: config.deepThink,
-    reasoningEffort: config.reasoningEffort,
-    toolChoice: config.toolChoice,
-    tools: getTools(),
-    sessionId: session.id,
-    resumeMessages,
-    onEvent: eventStream,
-    requestPermission: permission,
-    onPlanApproval: async () => (args.approvePlan ? 'approve' : 'reject'),
-  });
+  let result: RunResult;
+  try {
+    result = await runAgent({
+      prompt: args.run || '',
+      projectRoot: config.projectRoot,
+      model: config.model,
+      apiKey,
+      apiBase: config.apiBase,
+      mode: config.mode,
+      sandboxMode: config.sandboxMode,
+      maxIterations: config.maxIterations,
+      deepThink: config.deepThink,
+      reasoningEffort: config.reasoningEffort,
+      toolChoice: config.toolChoice,
+      tools: [...getTools(), ...mcpManager.getToolDefinitions()],
+      mcp: mcpManager,
+      sessionId: session.id,
+      resumeMessages,
+      onEvent: eventStream,
+      requestPermission: permission,
+      onPlanApproval: async () => (args.approvePlan ? 'approve' : 'reject'),
+    });
+  } finally {
+    await mcpManager.close().catch(() => {});
+  }
 
   session.messages = result.messages;
   session.summary = result.text.slice(0, 500);
@@ -154,6 +177,14 @@ async function runHeadless(args: ReturnType<typeof parseArgs>): Promise<number> 
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+  if (args.setApiKey) {
+    const paths = getAppPaths();
+    const store = new SecretStore(paths.credentialsFile, paths.keyFile);
+    await store.set('DEEPSEEK_API_KEY', args.setApiKey);
+    console.log('API Key 已加密保存');
+    process.exitCode = 0;
+    return;
+  }
   if (args.help) {
     console.log(usage());
     process.exitCode = 0;

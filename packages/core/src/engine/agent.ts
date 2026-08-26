@@ -6,7 +6,7 @@ import { getTool, getTools, TOOL_DEFINITIONS, summarizeToolInput, type ToolConte
 import { PermissionGate } from './permissions.js';
 import { generatePlan } from './planner.js';
 import type { ChatMessage, ChatContentPart, Plan, PlanDecision, RunOptions, RunResult, ToolDefinition } from '../types.js';
-import { modelSupportsImages } from '../types.js';
+import { modelSupportsImages, type McpHost, type JsonObject } from '../types.js';
 
 async function readInstructionFile(root: string, names: string[]): Promise<string> {
   for (const name of names) {
@@ -66,6 +66,7 @@ export async function runAgent(options: RunOptions): Promise<RunResult> {
   const permissionGate = new PermissionGate({
     mode: options.mode,
     sandboxMode: options.sandboxMode,
+    projectRoot: options.projectRoot,
     requestPermission: options.requestPermission,
   });
   const systemPrompt = buildSystemPrompt(options.projectRoot, options.tools);
@@ -89,6 +90,7 @@ export async function runAgent(options: RunOptions): Promise<RunResult> {
       todos.splice(0, todos.length, ...next);
     },
     signal: options.signal,
+    mcp: options.mcp,
   };
 
   if (options.mode === 'plan') {
@@ -154,7 +156,12 @@ export async function runAgent(options: RunOptions): Promise<RunResult> {
         break;
       }
       toolCallCount += 1;
-      const tool = getTool(call.name);
+      const staticTool = getTool(call.name);
+      const mcpDefinition = options.mcp?.getDefinition(call.name);
+      const tool = staticTool || (mcpDefinition ? { definition: mcpDefinition, runner: async (input: JsonObject, toolContext: ToolContext) => {
+        if (!mcpDefinition.mcpServer || !options.mcp) throw new Error('MCP runner unavailable');
+        return { content: await options.mcp.call(mcpDefinition.mcpServer, call.name, input), artifact: null };
+      } } : undefined);
       emit({ type: 'tool_start', toolName: call.name, input: call.args });
       if (!tool) {
         const error = `未知工具: ${call.name}`;

@@ -93,7 +93,7 @@ export interface LlmClient {
   chat(request: LlmRequest): Promise<LlmResult>;
 }
 
-export type ToolDanger = 'read' | 'write' | 'exec' | 'network' | 'internal';
+export type ToolDanger = 'read' | 'write' | 'exec' | 'network' | 'internal' | 'mcp';
 
 export interface ToolDefinition {
   name: string;
@@ -101,6 +101,22 @@ export interface ToolDefinition {
   danger: ToolDanger;
   parameters: JsonObject;
   required?: string[];
+  mcpServer?: string;
+}
+
+export interface McpServerConfig {
+  name: string;
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+}
+
+export interface McpHost {
+  getToolDefinitions(): ToolDefinition[];
+  hasTool(name: string): boolean;
+  getDefinition(name: string): ToolDefinition | undefined;
+  call(serverName: string, toolName: string, args: JsonObject): Promise<string>;
+  close(): Promise<void>;
 }
 
 export interface PermissionRequest {
@@ -109,6 +125,7 @@ export interface PermissionRequest {
   summary: string;
   args: JsonObject;
   danger: ToolDanger;
+  preview?: string;
 }
 
 export type PermissionDecision = 'allow_once' | 'allow_session' | 'allow_rule' | 'deny';
@@ -141,6 +158,7 @@ export interface RunOptions {
   reasoningEffort?: ReasoningEffort;
   toolChoice?: ToolChoice;
   tools: ToolDefinition[];
+  mcp?: McpHost;
   llm?: LlmClient;
   sessionId: string;
   resumeMessages?: ChatMessage[];

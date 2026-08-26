@@ -4,7 +4,10 @@ import path from 'node:path';
 import {
   getAppPaths,
   getTools,
+  chatMessageText,
   loadRuntimeConfig,
+  loadMcpServers,
+  McpManager,
   runAgent,
   SecretStore,
   SessionStore,
@@ -73,10 +76,19 @@ function App({ options }: { options: CliOptions }) {
   const [expandedThinking, setExpandedThinking] = useState(false);
   const [stats, setStats] = useState<Stats>({ iterations: 0, toolCalls: 0, tokens: '0 in / 0 out' });
   const [elapsed, setElapsed] = useState(0);
+  const [history, setHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState<number | null>(null);
+  const [scrollOffset, setScrollOffset] = useState(0);
   const controllerRef = useRef<AbortController | null>(null);
   const promptRef = useRef<PromptState>(null);
   const sessionRef = useRef<SessionRecord | null>(null);
+  const mcpRef = useRef<McpManager | null>(null);
   const startedAtRef = useRef(0);
+  const VISIBLE_ENTRIES = 12;
+
+  useEffect(() => {
+    setScrollOffset(0);
+  }, [entries.length]);
 
   useEffect(() => {
     if (!running) {
@@ -227,6 +239,16 @@ function App({ options }: { options: CliOptions }) {
         return;
       }
       const store = new SessionStore({ dir: paths.sessionsDir });
+      let mcpManager = mcpRef.current;
+      if (!mcpManager) {
+        mcpManager = new McpManager(await loadMcpServers(config.projectRoot));
+        await mcpManager.start();
+        mcpRef.current = mcpManager;
+        for (const error of mcpManager.errors) {
+          addItem({ kind: 'system', text: `[MCP] ${error}` });
+        }
+      }
+      const tools = [...getTools(), ...mcpManager.getToolDefinitions()];
       let session = sessionRef.current;
       if (!session) {
         session = options.session ? await store.load(options.session) : null;
@@ -270,7 +292,8 @@ function App({ options }: { options: CliOptions }) {
         deepThink: config.deepThink,
         reasoningEffort: config.reasoningEffort,
         toolChoice: config.toolChoice,
-        tools: getTools(),
+        tools,
+        mcp: mcpManager,
         sessionId: session.id,
         resumeMessages,
         signal: controller.signal,
@@ -291,17 +314,61 @@ function App({ options }: { options: CliOptions }) {
   const submit = useCallback(() => {
     const value = input.trim();
     if (!value) return;
+    setHistory((prev) => (prev[prev.length - 1] === value ? prev : [...prev, value].slice(-100)));
+    setHistoryIndex(null);
     if (value.startsWith('/')) {
       const [command, ...rest] = value.slice(1).split(/\s+/);
       const body = rest.join(' ');
       if (command === 'help') {
-        addItem({ kind: 'system', text: '/help /clear /quit /status /model <id> /mode <ask|plan|auto> /sandbox <mode> /deep-think <on|off>' });
+        addItem({
+          kind: 'system',
+          text: '/help /clear /quit /status /model <id> /mode <ask|plan|auto> /sandbox <mode> /deep-think <on|off> /api-key <key> /tools /sessions /history\nPgUp/PgDn 浏览历史 · Ctrl+T 展开思考 · Ctrl+C 取消',
+        });
       } else if (command === 'clear') {
         setEntries([]);
       } else if (command === 'quit' || command === 'exit') {
+        void mcpRef.current?.close();
         exit();
       } else if (command === 'status') {
         addItem({ kind: 'system', text: `model=${model} mode=${mode} sandbox=${sandbox} deepThink=${deepThink}` });
+      } else if (command === 'tools') {
+        addItem({ kind: 'system', text: getTools().map((tool) => `${tool.name} [${tool.danger}]`).join('\n') });
+      } else if (command === 'history') {
+        addItem({ kind: 'system', text: history.length ? history.slice(-20).join('\n') : '暂无历史命令' });
+      } else if (command === 'sessions') {
+        void (async () => {
+          const store = new SessionStore({ dir: getAppPaths().sessionsDir });
+          const sessions = await store.list(options.project ? path.resolve(options.project) : undefined);
+          addItem({
+            kind: 'system',
+            text: sessions.length
+              ? sessions
+                  .map(
+                    (session) =>
+                      `${session.id} · ${new Date(session.updatedAt).toLocaleString()} · ${chatMessageText(session.messages.find((message) => message.role === 'user')?.content).slice(0, 60) || '(空)'}`,
+                  )
+                  .join('\n')
+              : '暂无会话',
+          });
+        })();
+      } else if (command === 'session' && body) {
+        void (async () => {
+          const store = new SessionStore({ dir: getAppPaths().sessionsDir });
+          const session = await store.load(body);
+          if (!session) {
+            addItem({ kind: 'error', text: `找不到会话 ${body}` });
+            return;
+          }
+          sessionRef.current = session;
+          setModel(session.model);
+          addItem({ kind: 'system', text: `已恢复会话 ${session.id} · ${session.messages.length} 条消息` });
+        })();
+      } else if (command === 'delete' && body) {
+        void (async () => {
+          const store = new SessionStore({ dir: getAppPaths().sessionsDir });
+          await store.remove(body);
+          addItem({ kind: 'system', text: `已删除会话 ${body}` });
+        })();
       } else if (command === 'model' && body) {
         setModel(body);
       } else if (command === 'mode' && ['ask', 'plan', 'auto'].includes(body)) {
@@ -310,6 +377,13 @@ function App({ options }: { options: CliOptions }) {
         setSandbox(body);
       } else if (command === 'deep-think' && ['on', 'off'].includes(body)) {
         setDeepThink(body === 'on');
+      } else if (command === 'api-key' && body) {
+        void (async () => {
+          const paths = getAppPaths();
+          const store = new SecretStore(paths.credentialsFile, paths.keyFile);
+          await store.set('DEEPSEEK_API_KEY', body);
+          addItem({ kind: 'system', text: 'API Key 已加密保存' });
+        })();
       } else {
         addItem({ kind: 'system', text: `未知命令 ${command}` });
       }
@@ -317,7 +391,7 @@ function App({ options }: { options: CliOptions }) {
       return;
     }
     void runPrompt(value);
-  }, [addItem, exit, input, model, mode, sandbox, deepThink, runPrompt]);
+  }, [addItem, exit, history, input, model, mode, options.project, sandbox, deepThink, runPrompt]);
 
   useInput((keyInput, key) => {
     const activePrompt = promptRef.current;
@@ -383,6 +457,31 @@ function App({ options }: { options: CliOptions }) {
       setExpandedThinking((current) => !current);
       return;
     }
+    if (!running && key.pageUp) {
+      setScrollOffset((current) => Math.min(current + 4, Math.max(0, entries.length - VISIBLE_ENTRIES)));
+      return;
+    }
+    if (!running && key.pageDown) {
+      setScrollOffset((current) => Math.max(0, current - 4));
+      return;
+    }
+    if (!running && key.upArrow && history.length) {
+      const nextIndex = historyIndex === null ? history.length - 1 : Math.max(0, historyIndex - 1);
+      setHistoryIndex(nextIndex);
+      setInput(history[nextIndex]);
+      return;
+    }
+    if (!running && key.downArrow && historyIndex !== null) {
+      const nextIndex = historyIndex + 1;
+      if (nextIndex >= history.length) {
+        setHistoryIndex(null);
+        setInput('');
+      } else {
+        setHistoryIndex(nextIndex);
+        setInput(history[nextIndex]);
+      }
+      return;
+    }
     if (key.return) {
       submit();
       return;
@@ -401,11 +500,19 @@ function App({ options }: { options: CliOptions }) {
     return <Text color="yellow">当前终端不支持交互模式，请运行 auraxis --run "任务"。</Text>;
   }
 
+  const visibleEntries = entries.slice(
+    Math.max(0, entries.length - VISIBLE_ENTRIES - scrollOffset),
+    Math.max(0, entries.length - scrollOffset),
+  );
+
   return (
     <Box flexDirection="column" paddingX={1}>
       <HeaderBar project={projectLabel} running={running} />
       <Box flexDirection="column" marginTop={1} marginBottom={1}>
-        {entries.map((item, index) => {
+        {scrollOffset > 0 && visibleEntries.length < entries.length ? (
+          <Text dimColor>↑ PgUp / PgDn 浏览历史 · 当前位于最早可见位置</Text>
+        ) : null}
+        {visibleEntries.map((item, index) => {
           switch (item.kind) {
             case 'user':
               return <UserBlock key={index} text={item.text} />;

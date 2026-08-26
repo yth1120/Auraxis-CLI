@@ -109,9 +109,40 @@ export function AssistantBlock({ text }: { text: string }) {
   return (
     <Box flexDirection="column">
       <Text dimColor>— Auraxis</Text>
-      <Text color="white" wrap="wrap">
-        {text}
-      </Text>
+      <RichText text={text} />
+    </Box>
+  );
+}
+
+function splitCodeBlocks(text: string): Array<{ code?: string; text?: string }> {
+  const result: Array<{ code?: string; text?: string }> = [];
+  const regex = /```(?:[\w-]+)?\n([\s\S]*?)```/g;
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text))) {
+    if (match.index > last) result.push({ text: text.slice(last, match.index) });
+    result.push({ code: match[1].replace(/\n$/, '') });
+    last = regex.lastIndex;
+  }
+  if (last < text.length) result.push({ text: text.slice(last) });
+  return result;
+}
+
+function RichText({ text }: { text: string }) {
+  const blocks = splitCodeBlocks(text);
+  return (
+    <Box flexDirection="column">
+      {blocks.map((block, index) =>
+        block.code !== undefined ? (
+          <Text key={index} color="cyan" wrap="wrap">
+            {block.code}
+          </Text>
+        ) : (
+          <Text key={index} color="white" wrap="wrap">
+            {block.text}
+          </Text>
+        ),
+      )}
     </Box>
   );
 }
@@ -188,6 +219,13 @@ export function PermissionBlock({ request }: { request: PermissionRequest }) {
       <Text dimColor wrap="wrap">
         {JSON.stringify(request.args, null, 2)}
       </Text>
+      {request.preview ? (
+        <Box borderStyle="single" borderColor={color} paddingX={1} marginTop={1}>
+          <Text color={color} dimColor wrap="wrap">
+            {request.preview}
+          </Text>
+        </Box>
+      ) : null}
       <Text color="yellow">
         [y]允许一次 · [a]允许本会话 · [r]允许当前规则 · [n]拒绝
       </Text>
@@ -206,19 +244,12 @@ export function AskBlock({ question }: { question: string }) {
 
 export function ErrorBlock({ text }: { text: string }) {
   return (
-    <Panel color="red" border="double" title="错误">
-      <Text color="red">{text}</Text>
-    </Panel>
+    <Text color="red">✗ {text}</Text>
   );
 }
 
 export function SystemBlock({ text }: { text: string }) {
   return (
-    <Panel color="magenta" border="single">
-      <Text color="magenta" dimColor>
-        ℹ {text}
-      </Text>
-    </Panel>
+    <Text color="magenta">ℹ {text}</Text>
   );
 }
-

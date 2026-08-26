@@ -1,9 +1,11 @@
 import type { ApprovalPolicy, PermissionDecision, PermissionRequest, SandboxMode, ToolDanger, JsonObject } from '../types.js';
 import { isToolReadOnly, summarizeToolInput } from '../tools/registry.js';
+import { buildPermissionPreview } from './preview.js';
 
 export interface PermissionGateOptions {
   mode: ApprovalPolicy;
   sandboxMode: SandboxMode;
+  projectRoot: string;
   requestPermission?: (request: PermissionRequest) => Promise<PermissionDecision>;
 }
 
@@ -33,6 +35,7 @@ export class PermissionGate {
       summary: signature,
       args,
       danger,
+      preview: await buildPermissionPreview(toolName, args, this.options.projectRoot),
     };
     const decision = await this.options.requestPermission?.(request);
     switch (decision) {
@@ -73,4 +76,3 @@ export function permissionDescription(danger: ToolDanger): string {
       return '危险操作';
   }
 }
-
