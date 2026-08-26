@@ -643,7 +643,7 @@ export function HomeCard({
     { icon: '◈', command: '/agents', description: '多 Agent' },
     { icon: '⛁', command: '/mcp', description: '扩展集成' },
   ];
-  const fullDivider = Array.from({ length: 8 }, () => '│').join('\n');
+  const fullDivider = Array.from({ length: 6 }, () => '│').join('\n');
 
   return (
     <Box flexDirection="column">
@@ -653,7 +653,7 @@ export function HomeCard({
             <Text color={theme.brand} bold>
               ❯_ Auraxis Agent CLI
             </Text>
-            <Box flexDirection="row" marginTop={1}>
+            <Box flexDirection="row">
               {commands.map((command, index) => (
                 <CommandChip
                   key={command.command}
@@ -663,7 +663,7 @@ export function HomeCard({
                 />
               ))}
             </Box>
-            <Box marginTop={1}>
+            <Box>
               <Text color={theme.muted}>
                 Tab 切换命令 · ← → 选择 · Enter 执行 · 1-5 直达
               </Text>
