@@ -2,8 +2,25 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { Box, Text, useStdout } from 'ink';
 import os from 'node:os';
 import type { PermissionRequest, Plan } from '@auraxis/core';
+import { LOGO_PIXELS } from './logo-pixels.js';
 
 type BorderStyle = 'round' | 'single' | 'double';
+
+function PixelLogo() {
+  return (
+    <Box flexDirection="column">
+      {LOGO_PIXELS.map((row, rowIndex) => (
+        <Box key={rowIndex} flexDirection="row">
+          {row.map((pixel, colIndex) => (
+            <Text key={colIndex} color={pixel.top} backgroundColor={pixel.bottom}>
+              ▀
+            </Text>
+          ))}
+        </Box>
+      ))}
+    </Box>
+  );
+}
 
 export type ThemeName = 'dark' | 'light' | 'neon' | 'mono';
 
@@ -593,29 +610,24 @@ export function HomeCard({
       <Panel color={theme.brand} border="round">
         <Box flexDirection="row">
           <Box flexDirection="column" flexGrow={1}>
-            <Box flexDirection="row" alignItems="center">
-              <Text color={theme.brand} bold>
-                ▲
-              </Text>
-              <Text color={theme.info} dimColor>
-                {' '}
-                ✦ ✧
-              </Text>
-              <Text color={theme.brand} bold>
-                {' '}
-                Auraxis
-              </Text>
-              <Text color={theme.text} bold>
-                {' '}Agent CLI
-              </Text>
-            </Box>
-            <Box flexDirection="row" marginTop={1}>
-              <Text color={theme.success} bold>
-                ● 已连接到 Auraxis Agent
-              </Text>
-              <Text color={theme.muted}>
-                {' '}· 版本 {version}
-              </Text>
+            <Box flexDirection="row" alignItems="flex-start">
+              <PixelLogo />
+              <Box flexDirection="column" marginLeft={1}>
+                <Text color={theme.brand} bold>
+                  Auraxis
+                </Text>
+                <Text color={theme.text} bold>
+                  Agent CLI
+                </Text>
+                <Box flexDirection="row" marginTop={1}>
+                  <Text color={theme.success} bold>
+                    ● 已连接到 Auraxis Agent
+                  </Text>
+                  <Text color={theme.muted}>
+                    {' '}· 版本 {version}
+                  </Text>
+                </Box>
+              </Box>
             </Box>
           </Box>
           <Text color={theme.muted}>
