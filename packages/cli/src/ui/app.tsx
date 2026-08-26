@@ -579,6 +579,7 @@ function App({ options }: { options: CliOptions }) {
             sandbox={sandbox}
             version="0.1.0"
             running={running}
+            input={input}
           />
         ) : (
           <HeaderBar project={projectLabel} running={running} />
@@ -619,7 +620,7 @@ function App({ options }: { options: CliOptions }) {
           }
         })}
         </Box>
-        <PromptBar input={input} running={running} />
+        {!showHome ? <PromptBar input={input} running={running} /> : null}
         {prompt?.kind === 'permission' ? <PermissionBlock request={prompt.request} /> : null}
         {prompt?.kind === 'plan' ? (
           <>
@@ -629,17 +630,19 @@ function App({ options }: { options: CliOptions }) {
         ) : null}
         {prompt?.kind === 'ask' ? <AskBlock question={prompt.question} /> : null}
         {exitArmed ? <Text color="yellow">按 Ctrl+C 确认退出</Text> : null}
-        <StatusBar
-          model={model}
-          mode={mode}
-          sandbox={sandbox}
-          deepThink={deepThink}
-          running={running}
-          iterations={stats.iterations}
-          toolCalls={stats.toolCalls}
-          tokens={`${elapsed}s · ${stats.tokens}`}
-          themeName={theme}
-        />
+        {!showHome ? (
+          <StatusBar
+            model={model}
+            mode={mode}
+            sandbox={sandbox}
+            deepThink={deepThink}
+            running={running}
+            iterations={stats.iterations}
+            toolCalls={stats.toolCalls}
+            tokens={`${elapsed}s · ${stats.tokens}`}
+            themeName={theme}
+          />
+        ) : null}
       </Box>
     </ThemeProvider>
   );

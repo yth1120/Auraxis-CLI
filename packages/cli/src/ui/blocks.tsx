@@ -431,7 +431,7 @@ function QuickStartCard({
   );
 }
 
-export function HomeCard({
+export function RichHomeCard({
   project,
   branch,
   model,
@@ -536,6 +536,131 @@ export function HomeCard({
         <Text color={theme.info}>
           /help 查看全部命令
         </Text>
+      </Panel>
+    </Box>
+  );
+}
+
+export function HomeCard({
+  project,
+  branch,
+  model,
+  mode,
+  sandbox,
+  version,
+  running,
+  input,
+}: {
+  project: string;
+  branch: string;
+  model: string;
+  mode: string;
+  sandbox: string;
+  version: string;
+  running: boolean;
+  input: string;
+}) {
+  const theme = useTheme();
+  const [sessionSeconds, setSessionSeconds] = useState(0);
+  const [cursorOn, setCursorOn] = useState(true);
+  const home = os.homedir();
+  const { stdout } = useStdout();
+  const wideFooter = (stdout.columns || 80) >= 108;
+  const displayProject = project.startsWith(home) ? `~${project.slice(home.length)}` : project;
+
+  useEffect(() => {
+    const timer = setInterval(() => setSessionSeconds((current) => current + 1), 1000);
+    const cursor = setInterval(() => setCursorOn((current) => !current), 500);
+    return () => {
+      clearInterval(timer);
+      clearInterval(cursor);
+    };
+  }, []);
+
+  return (
+    <Box flexDirection="column">
+      <Panel color={theme.brand} border="round">
+        <Box flexDirection="row">
+          <Box flexDirection="column" flexGrow={1}>
+            <Box flexDirection="row">
+              <Text color={theme.info} bold>
+                ❯_
+              </Text>
+              <Text color={theme.brand} bold>
+                {'  '}Auraxis Agent
+              </Text>
+              <Text color={theme.muted} dimColor>
+                {' '}(v{version})
+              </Text>
+            </Box>
+            <Text color={theme.muted}>
+              智能协作 · 代码理解 · 自动化执行
+            </Text>
+            <Text color={theme.text}>
+              Tips: 输入自然语言开始对话，或使用 / 命令
+            </Text>
+            <Box flexDirection="row">
+              <Text color={theme.info} bold>
+                &gt;
+              </Text>
+              <Text color={theme.text}>
+                {' '}
+                {input}
+              </Text>
+              <Text color={theme.text}>{cursorOn ? '▌' : ' '}</Text>
+            </Box>
+          </Box>
+          <Text color={theme.muted}>
+            {'│\n│\n│\n│\n│'}
+          </Text>
+          <Box flexDirection="column">
+            <Text color={theme.muted}>
+              cwd: <Text color={theme.text}>{displayProject}</Text>
+            </Text>
+            <Text color={theme.muted}>
+              branch: <Text color={theme.text}>{branch}</Text>
+            </Text>
+            <Text color={theme.muted}>
+              model: <Text color={theme.text}>{model}</Text>
+            </Text>
+            <Text color={theme.muted}>
+              session: <Text color={theme.brand}>{formatSessionTime(sessionSeconds)}</Text>
+            </Text>
+          </Box>
+        </Box>
+      </Panel>
+      <Panel color={theme.muted} border="single">
+        {wideFooter ? (
+          <Box flexDirection="row">
+            <Text color={theme.info}>/chat</Text>
+            <Text color={theme.text}> 开始对话</Text>
+            <Text color={theme.info}>/init</Text>
+            <Text color={theme.text}> 初始化项目</Text>
+            <Text color={theme.info}>/run &lt;file&gt;</Text>
+            <Text color={theme.text}> 运行文件</Text>
+            <Text color={theme.info}>/config</Text>
+            <Text color={theme.text}> 配置设置</Text>
+            <Text color={theme.info}>/help</Text>
+            <Text color={theme.text}> 查看帮助</Text>
+          </Box>
+        ) : (
+          <Box flexDirection="column">
+            <Text>
+              <Text color={theme.info}>/chat</Text>
+              <Text color={theme.text}> 开始对话</Text>
+              <Text color={theme.info}>    /init</Text>
+              <Text color={theme.text}> 初始化项目</Text>
+              <Text color={theme.info}>    /run &lt;file&gt;</Text>
+              <Text color={theme.text}> 运行文件</Text>
+            </Text>
+            <Text>
+              <Text color={theme.info}>/config</Text>
+              <Text color={theme.text}> 配置设置</Text>
+              <Text color={theme.info}>    /help</Text>
+              <Text color={theme.text}> 查看帮助</Text>
+            </Text>
+          </Box>
+        )}
       </Panel>
     </Box>
   );
