@@ -1,0 +1,31 @@
+{
+  "name": "auraxis-cli-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.12.0",
+    "npm": ">=10"
+  },
+  "scripts": {
+    "dev": "npm run dev -w @auraxis/cli",
+    "start": "npm run start -w @auraxis/cli",
+    "build": "npm run build -w @auraxis/cli",
+    "typecheck": "npm run typecheck -w @auraxis/core && npm run typecheck -w @auraxis/cli",
+    "test": "npm run test -w @auraxis/core && npm run test -w @auraxis/cli",
+    "e2e": "node scripts/e2e-cli.mjs",
+    "check": "npm run typecheck && npm run test && npm run build && npm run e2e"
+  },
+  "devDependencies": {
+    "@types/node": "^26.3.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "esbuild": "^0.25.12",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}
