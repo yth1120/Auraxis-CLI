@@ -639,7 +639,7 @@ export function HomeCard({
                 ❯_ Auraxis Agent CLI
               </Text>
               <Text color={theme.success} bold>
-                ● 已连接 · v{version}
+                ● 独立运行 · v{version}
               </Text>
             </Box>
             <Box flexDirection="row" marginTop={1}>
