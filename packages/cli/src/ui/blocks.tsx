@@ -488,7 +488,7 @@ export function RichHomeCard({
     <Box flexDirection="column">
       <Panel color={theme.brand} border="round">
         <Box flexDirection="row">
-          <Box flexDirection="column" flexGrow={1}>
+          <Box flexDirection="column">
             <Box flexDirection="row" alignItems="center">
               <Text color={theme.brand} bold>
                 ▲
