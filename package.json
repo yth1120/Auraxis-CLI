@@ -13,6 +13,7 @@
   "scripts": {
     "dev": "npm run dev -w @auraxis/cli",
     "start": "npm run start -w @auraxis/cli",
+    "cli": "npm run start -w @auraxis/cli --",
     "build": "npm run build -w @auraxis/cli",
     "typecheck": "npm run typecheck -w @auraxis/core && npm run typecheck -w @auraxis/cli",
     "test": "npm run test -w @auraxis/core && npm run test -w @auraxis/cli",

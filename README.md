@@ -10,7 +10,7 @@
 ```bash
 npm install
 npm run build
-npx auraxis
+npm run cli
 ```
 
 需要提供 DeepSeek API Key：
