@@ -580,10 +580,10 @@ export function HomeCard({
     return () => clearInterval(timer);
   }, []);
   const footerCommands = [
-    { icon: '💬', command: '/chat', description: '开始对话' },
-    { icon: '📦', command: '/init', description: '初始化项目' },
-    { icon: '⚡', command: '/run <file>', description: '运行文件' },
-    { icon: '⚙', command: '/config', description: '配置设置' },
+    { icon: '▣', command: '/chat', description: '开始对话' },
+    { icon: '◇', command: '/init', description: '初始化项目' },
+    { icon: '▸', command: '/run <file>', description: '运行文件' },
+    { icon: '☰', command: '/config', description: '配置设置' },
     { icon: '?', command: '/help', description: '查看更多命令' },
   ];
 
