@@ -6,7 +6,7 @@ export type AgentEvent =
   | { type: 'iteration_start'; iteration: number }
   | { type: 'iteration_end'; iteration: number }
   | { type: 'tool_start'; toolName: string; input: Record<string, unknown> }
-  | { type: 'tool_end'; toolName: string; durationMs: number; ok: boolean }
+  | { type: 'tool_end'; toolName: string; durationMs: number; ok: boolean; outputPreview?: string }
   | { type: 'tool_error'; toolName: string; error: string }
   | { type: 'plan_created'; plan: Plan }
   | { type: 'plan_updated'; plan: Plan }

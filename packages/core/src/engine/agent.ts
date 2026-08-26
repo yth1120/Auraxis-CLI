@@ -206,7 +206,13 @@ export async function runAgent(options: RunOptions): Promise<RunResult> {
       const started = Date.now();
       try {
         const output = await tool.runner(call.args, context);
-        emit({ type: 'tool_end', toolName: call.name, durationMs: Date.now() - started, ok: true });
+        emit({
+          type: 'tool_end',
+          toolName: call.name,
+          durationMs: Date.now() - started,
+          ok: true,
+          outputPreview: output.content.slice(0, 1200),
+        });
         const payload = JSON.stringify({ ok: true, output: output.content.slice(0, 200_000), artifact: output.artifact ?? null });
         messages.push({ role: 'tool', tool_call_id: call.id, name: call.name, content: payload });
         const artifact = output.artifact as Record<string, unknown> | undefined;

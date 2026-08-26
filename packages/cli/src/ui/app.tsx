@@ -32,6 +32,8 @@ import {
   AskBlock,
   ErrorBlock,
   SystemBlock,
+  ThemeProvider,
+  type ThemeName,
 } from './blocks.js';
 
 interface UiItem {
@@ -42,6 +44,7 @@ interface UiItem {
   status?: 'running' | 'done' | 'error';
   duration?: number;
   error?: string;
+  output?: string;
   plan?: Plan;
 }
 
@@ -73,6 +76,7 @@ function App({ options }: { options: CliOptions }) {
   const [mode, setMode] = useState<string>(options.mode || 'ask');
   const [sandbox, setSandbox] = useState<string>(options.sandbox || 'workspace-write');
   const [deepThink, setDeepThink] = useState(Boolean(options.deepThink));
+  const [theme, setTheme] = useState<ThemeName>('dark');
   const [expandedThinking, setExpandedThinking] = useState(false);
   const [stats, setStats] = useState<Stats>({ iterations: 0, toolCalls: 0, tokens: '0 in / 0 out' });
   const [elapsed, setElapsed] = useState(0);
@@ -132,7 +136,7 @@ function App({ options }: { options: CliOptions }) {
   }, []);
 
   const appendTool = useCallback(
-    (name: string, summary: string, ok?: boolean, duration?: number, error?: string) => {
+    (name: string, summary: string, ok?: boolean, duration?: number, error?: string, preview?: string) => {
       setEntries((prev) => {
         const last = prev[prev.length - 1];
         if (last?.kind === 'tool' && last.toolName === name) {
@@ -145,6 +149,7 @@ function App({ options }: { options: CliOptions }) {
               status: ok === undefined ? 'running' : ok ? 'done' : 'error',
               duration: duration ?? last.duration,
               error: error ?? last.error,
+              output: preview ?? last.output,
             },
           ];
         }
@@ -158,6 +163,7 @@ function App({ options }: { options: CliOptions }) {
             status: ok === undefined ? 'running' : ok ? 'done' : 'error',
             duration,
             error,
+            output: preview,
           },
         ];
       });
@@ -189,7 +195,7 @@ function App({ options }: { options: CliOptions }) {
           appendTool(event.toolName, summarizeToolInput(event.toolName, event.input), undefined);
           break;
         case 'tool_end':
-          appendTool(event.toolName, `${event.toolName} · ${event.durationMs}ms`, true, event.durationMs);
+          appendTool(event.toolName, `${event.toolName} · ${event.durationMs}ms`, true, event.durationMs, undefined, event.outputPreview);
           break;
         case 'tool_error':
           appendTool(event.toolName, `${event.toolName} 失败`, false, undefined, event.error);
@@ -322,7 +328,7 @@ function App({ options }: { options: CliOptions }) {
       if (command === 'help') {
         addItem({
           kind: 'system',
-          text: '/help /clear /quit /status /model <id> /mode <ask|plan|auto> /sandbox <mode> /deep-think <on|off> /api-key <key> /tools /sessions /history\nPgUp/PgDn 浏览历史 · Ctrl+T 展开思考 · Ctrl+C 取消',
+          text: '/help /clear /quit /status /model <id> /mode <ask|plan|auto> /sandbox <mode> /deep-think <on|off> /theme <dark|light|neon|mono> /api-key <key> /tools /sessions /history\nPgUp/PgDn 浏览历史 · Ctrl+T 展开思考 · Ctrl+C 取消',
         });
       } else if (command === 'clear') {
         setEntries([]);
@@ -384,6 +390,9 @@ function App({ options }: { options: CliOptions }) {
           await store.set('DEEPSEEK_API_KEY', body);
           addItem({ kind: 'system', text: 'API Key 已加密保存' });
         })();
+      } else if (command === 'theme' && ['dark', 'light', 'neon', 'mono'].includes(body)) {
+        setTheme(body as ThemeName);
+        addItem({ kind: 'system', text: `主题已切换为 ${body}` });
       } else {
         addItem({ kind: 'system', text: `未知命令 ${command}` });
       }
@@ -506,9 +515,10 @@ function App({ options }: { options: CliOptions }) {
   );
 
   return (
-    <Box flexDirection="column" paddingX={1}>
-      <HeaderBar project={projectLabel} running={running} />
-      <Box flexDirection="column" marginTop={1} marginBottom={1}>
+    <ThemeProvider theme={theme}>
+      <Box flexDirection="column" paddingX={1}>
+        <HeaderBar project={projectLabel} running={running} />
+        <Box flexDirection="column" marginTop={1} marginBottom={1}>
         {scrollOffset > 0 && visibleEntries.length < entries.length ? (
           <Text dimColor>↑ PgUp / PgDn 浏览历史 · 当前位于最早可见位置</Text>
         ) : null}
@@ -530,6 +540,7 @@ function App({ options }: { options: CliOptions }) {
                   ok={item.ok}
                   error={item.error}
                   duration={item.duration}
+                  output={item.output}
                 />
               );
             case 'plan':
@@ -542,28 +553,30 @@ function App({ options }: { options: CliOptions }) {
               return null;
           }
         })}
+        </Box>
+        <PromptBar input={input} running={running} />
+        {prompt?.kind === 'permission' ? <PermissionBlock request={prompt.request} /> : null}
+        {prompt?.kind === 'plan' ? (
+          <>
+            <PlanBlock plan={prompt.plan} />
+            <Text color="blue">[a]批准全部 · [r]拒绝 · [e]编辑（将在后续版本开放）</Text>
+          </>
+        ) : null}
+        {prompt?.kind === 'ask' ? <AskBlock question={prompt.question} /> : null}
+        {exitArmed ? <Text color="yellow">按 Ctrl+C 确认退出</Text> : null}
+        <StatusBar
+          model={model}
+          mode={mode}
+          sandbox={sandbox}
+          deepThink={deepThink}
+          running={running}
+          iterations={stats.iterations}
+          toolCalls={stats.toolCalls}
+          tokens={`${elapsed}s · ${stats.tokens}`}
+          themeName={theme}
+        />
       </Box>
-      <PromptBar input={input} running={running} />
-      {prompt?.kind === 'permission' ? <PermissionBlock request={prompt.request} /> : null}
-      {prompt?.kind === 'plan' ? (
-        <>
-          <PlanBlock plan={prompt.plan} />
-          <Text color="blue">[a]批准全部 · [r]拒绝 · [e]编辑（将在后续版本开放）</Text>
-        </>
-      ) : null}
-      {prompt?.kind === 'ask' ? <AskBlock question={prompt.question} /> : null}
-      {exitArmed ? <Text color="yellow">按 Ctrl+C 确认退出</Text> : null}
-      <StatusBar
-        model={model}
-        mode={mode}
-        sandbox={sandbox}
-        deepThink={deepThink}
-        running={running}
-        iterations={stats.iterations}
-        toolCalls={stats.toolCalls}
-        tokens={`${elapsed}s · ${stats.tokens}`}
-      />
-    </Box>
+    </ThemeProvider>
   );
 }
 
