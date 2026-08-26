@@ -643,42 +643,44 @@ export function HomeCard({
     { icon: '◈', command: '/agents', description: '多 Agent' },
     { icon: '⛁', command: '/mcp', description: '扩展集成' },
   ];
+  const fullDivider = Array.from({ length: 8 }, () => '│').join('\n');
 
   return (
     <Box flexDirection="column">
-      <Box flexDirection="row">
-        <Panel color={theme.brand} border="round" flexGrow={1}>
-          <Box flexDirection="row" justifyContent="space-between">
+      <Panel color={theme.brand} border="round">
+        <Box flexDirection="row">
+          <Box flexDirection="column">
             <Text color={theme.brand} bold>
               ❯_ Auraxis Agent CLI
             </Text>
+            <Box flexDirection="row" marginTop={1}>
+              {commands.map((command, index) => (
+                <CommandChip
+                  key={command.command}
+                  icon={command.icon}
+                  label={command.command}
+                  selected={homeFocus === 'commands' && selectedCommand === index}
+                />
+              ))}
+            </Box>
+            <Box marginTop={1}>
+              <Text color={theme.muted}>
+                Tab 切换命令 · ← → 选择 · Enter 执行 · 1-5 直达
+              </Text>
+            </Box>
           </Box>
-          <Box flexDirection="row" marginTop={1}>
-            {commands.map((command, index) => (
-              <CommandChip
-                key={command.command}
-                icon={command.icon}
-                label={command.command}
-                selected={homeFocus === 'commands' && selectedCommand === index}
-              />
-            ))}
-          </Box>
-          <Box marginTop={1}>
-            <Text color={theme.muted}>
-              Tab 切换命令 · ← → 选择 · Enter 执行 · 1-5 直达
-            </Text>
-          </Box>
-        </Panel>
-        <Panel color={theme.brand} border="round" width={26} marginLeft={1}>
-          <Box flexDirection="column">
+          <Text color={theme.muted}>
+            {fullDivider}
+          </Text>
+          <Box flexDirection="column" marginLeft={2}>
             <Text color={theme.muted}>{displayProject}</Text>
             <Text color={theme.muted}>{branch}</Text>
             <Text color={theme.muted}>{model}</Text>
             <Text color={theme.muted}>{appMode.toUpperCase()}</Text>
             <Text color={theme.brand}>{formatSessionTime(sessionSeconds)}</Text>
           </Box>
-        </Panel>
-      </Box>
+        </Box>
+      </Panel>
       <PromptBar input={input} running={running} />
     </Box>
   );
