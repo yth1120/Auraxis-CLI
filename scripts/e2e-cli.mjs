@@ -44,7 +44,11 @@ const child = spawn(
     '--auto-approve',
     '--json',
   ],
-  { cwd: projectRoot, stdio: ['ignore', 'pipe', 'pipe'] },
+  {
+    cwd: projectRoot,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, AURAXIS_HOME: path.join(workDir, 'auraxis-data') },
+  },
 );
 
 let stdout = '';
@@ -70,4 +74,3 @@ if (output !== 'hello from cli') {
   process.exit(1);
 }
 console.log('e2e ok:', stdout.trim().split('\n').at(-1));
-
