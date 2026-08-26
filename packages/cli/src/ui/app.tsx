@@ -1,5 +1,6 @@
-import React, { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Text, render, useApp, useInput, useStdin } from 'ink';
+import path from 'node:path';
 import {
   getAppPaths,
   getTools,
@@ -7,6 +8,7 @@ import {
   runAgent,
   SecretStore,
   SessionStore,
+  summarizeToolInput,
   type AgentEvent,
   type ChatMessage,
   type PermissionRequest,
@@ -14,12 +16,30 @@ import {
   type SessionRecord,
 } from '@auraxis/core';
 import type { CliOptions } from '../args.js';
+import {
+  HeaderBar,
+  StatusBar,
+  PromptBar,
+  UserBlock,
+  AssistantBlock,
+  ThinkingBlock,
+  ToolBlock,
+  PlanBlock,
+  PermissionBlock,
+  AskBlock,
+  ErrorBlock,
+  SystemBlock,
+} from './blocks.js';
 
 interface UiItem {
   kind: 'user' | 'assistant' | 'thinking' | 'tool' | 'error' | 'system' | 'plan';
   text: string;
   toolName?: string;
   ok?: boolean;
+  status?: 'running' | 'done' | 'error';
+  duration?: number;
+  error?: string;
+  plan?: Plan;
 }
 
 type PromptState =
@@ -28,9 +48,14 @@ type PromptState =
   | { kind: 'ask'; question: string; resolve: (value: string) => void }
   | null;
 
+interface Stats {
+  iterations: number;
+  toolCalls: number;
+  tokens: string;
+}
+
 function formatPlan(plan: Plan): string {
-  const lines = plan.tasks.map((task) => `  ${task.id}. ${task.description} [${task.status}]`);
-  return `${plan.summary ? `${plan.summary}\n` : ''}计划 ${plan.tasks.length} 项:\n${lines.join('\n')}`;
+  return plan.tasks.map((task) => `  ${task.id}. ${task.description} [${task.status}]`).join('\n');
 }
 
 function App({ options }: { options: CliOptions }) {
@@ -45,9 +70,24 @@ function App({ options }: { options: CliOptions }) {
   const [mode, setMode] = useState<string>(options.mode || 'ask');
   const [sandbox, setSandbox] = useState<string>(options.sandbox || 'workspace-write');
   const [deepThink, setDeepThink] = useState(Boolean(options.deepThink));
+  const [expandedThinking, setExpandedThinking] = useState(false);
+  const [stats, setStats] = useState<Stats>({ iterations: 0, toolCalls: 0, tokens: '0 in / 0 out' });
+  const [elapsed, setElapsed] = useState(0);
   const controllerRef = useRef<AbortController | null>(null);
   const promptRef = useRef<PromptState>(null);
   const sessionRef = useRef<SessionRecord | null>(null);
+  const startedAtRef = useRef(0);
+
+  useEffect(() => {
+    if (!running) {
+      setElapsed(0);
+      return;
+    }
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - startedAtRef.current) / 1000)), 500);
+    return () => clearInterval(timer);
+  }, [running]);
+
+  const projectLabel = path.basename(options.project || process.cwd()) || '当前项目';
 
   const setActivePrompt = (next: PromptState) => {
     promptRef.current = next;
@@ -79,15 +119,39 @@ function App({ options }: { options: CliOptions }) {
     });
   }, []);
 
-  const appendTool = useCallback((name: string, text: string, ok?: boolean) => {
-    setEntries((prev) => {
-      const last = prev[prev.length - 1];
-      if (last?.kind === 'tool' && last.toolName === name) {
-        return [...prev.slice(0, -1), { ...last, text: `${last.text} ${text}`.trim(), ok: ok ?? last.ok }];
-      }
-      return [...prev, { kind: 'tool', toolName: name, text, ok }];
-    });
-  }, []);
+  const appendTool = useCallback(
+    (name: string, summary: string, ok?: boolean, duration?: number, error?: string) => {
+      setEntries((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.kind === 'tool' && last.toolName === name) {
+          return [
+            ...prev.slice(0, -1),
+            {
+              ...last,
+              text: summary || last.text,
+              ok: ok ?? last.ok,
+              status: ok === undefined ? 'running' : ok ? 'done' : 'error',
+              duration: duration ?? last.duration,
+              error: error ?? last.error,
+            },
+          ];
+        }
+        return [
+          ...prev,
+          {
+            kind: 'tool',
+            toolName: name,
+            text: summary,
+            ok,
+            status: ok === undefined ? 'running' : ok ? 'done' : 'error',
+            duration,
+            error,
+          },
+        ];
+      });
+    },
+    [],
+  );
 
   const saveSession = useCallback(async (session: SessionRecord, messages: ChatMessage[], text: string) => {
     const store = new SessionStore({ dir: getAppPaths().sessionsDir });
@@ -96,114 +160,133 @@ function App({ options }: { options: CliOptions }) {
     await store.save(session);
   }, []);
 
-  const handleEvent = useCallback((event: AgentEvent) => {
-    switch (event.type) {
-      case 'text_chunk':
-        appendAssistant(event.text);
-        break;
-      case 'thinking_chunk':
-        appendThinking(event.chunk, event.isNewBlock);
-        break;
-      case 'tool_start':
-        appendTool(event.toolName, `[工具] ${event.toolName}`, undefined);
-        break;
-      case 'tool_end':
-        appendTool(event.toolName, `[完成] ${event.toolName} (${event.durationMs}ms)`, true);
-        break;
-      case 'tool_error':
-        appendTool(event.toolName, `[失败] ${event.toolName}: ${event.error}`, false);
-        break;
-      case 'plan_created':
-        addItem({ kind: 'plan', text: formatPlan(event.plan) });
-        break;
-      case 'plan_updated':
-        addItem({ kind: 'plan', text: formatPlan(event.plan) });
-        break;
-      case 'system_message':
-        addItem({ kind: 'system', text: event.content });
-        break;
-      case 'error':
-        addItem({ kind: 'error', text: event.error });
-        break;
-      default:
-        break;
-    }
-  }, [addItem, appendAssistant, appendThinking, appendTool]);
+  const handleEvent = useCallback(
+    (event: AgentEvent) => {
+      switch (event.type) {
+        case 'text_chunk':
+          appendAssistant(event.text);
+          break;
+        case 'thinking_chunk':
+          appendThinking(event.chunk, event.isNewBlock);
+          break;
+        case 'iteration_start':
+          setStats((prev) => ({ ...prev, iterations: event.iteration }));
+          break;
+        case 'tool_start':
+          setStats((prev) => ({ ...prev, toolCalls: prev.toolCalls + 1 }));
+          appendTool(event.toolName, summarizeToolInput(event.toolName, event.input), undefined);
+          break;
+        case 'tool_end':
+          appendTool(event.toolName, `${event.toolName} · ${event.durationMs}ms`, true, event.durationMs);
+          break;
+        case 'tool_error':
+          appendTool(event.toolName, `${event.toolName} 失败`, false, undefined, event.error);
+          break;
+        case 'plan_created':
+          addItem({ kind: 'plan', text: formatPlan(event.plan), plan: event.plan });
+          break;
+        case 'plan_updated':
+          addItem({ kind: 'plan', text: formatPlan(event.plan), plan: event.plan });
+          break;
+        case 'system_message':
+          addItem({ kind: 'system', text: event.content });
+          break;
+        case 'usage':
+          setStats((prev) => ({
+            ...prev,
+            tokens: `${event.inputTokens} in / ${event.outputTokens} out`,
+          }));
+          break;
+        case 'error':
+          addItem({ kind: 'error', text: event.error });
+          break;
+        default:
+          break;
+      }
+    },
+    [addItem, appendAssistant, appendThinking, appendTool],
+  );
 
-  const runPrompt = useCallback(async (promptText: string) => {
-    const config = await loadRuntimeConfig({
-      project: options.project,
-      model,
-      apiKey: options.apiKey,
-      apiBase: options.apiBase,
-      mode,
-      sandbox,
-      deepThink,
-      maxIterations: options.maxIterations,
-    });
-    const paths = getAppPaths();
-    const secret = new SecretStore(paths.credentialsFile, paths.keyFile);
-    const apiKey = config.apiKey || (await secret.get('DEEPSEEK_API_KEY').catch(() => undefined)) || '';
-    if (!apiKey) {
-      addItem({ kind: 'error', text: '未配置 DeepSeek API Key，请设置 DEEPSEEK_API_KEY 后重试。' });
-      return;
-    }
-    const store = new SessionStore({ dir: paths.sessionsDir });
-    let session = sessionRef.current;
-    if (!session) {
-      session = options.session ? await store.load(options.session) : null;
-      if (!session) session = await store.create(config.projectRoot, config.model);
-      sessionRef.current = session;
-    }
-    const resumeMessages = session.messages || [];
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    setRunning(true);
-    addItem({ kind: 'user', text: promptText });
+  const runPrompt = useCallback(
+    async (promptText: string) => {
+      const config = await loadRuntimeConfig({
+        project: options.project,
+        model,
+        apiKey: options.apiKey,
+        apiBase: options.apiBase,
+        mode,
+        sandbox,
+        deepThink,
+        maxIterations: options.maxIterations,
+      });
+      const paths = getAppPaths();
+      const secret = new SecretStore(paths.credentialsFile, paths.keyFile);
+      const apiKey = config.apiKey || (await secret.get('DEEPSEEK_API_KEY').catch(() => undefined)) || '';
+      if (!apiKey) {
+        addItem({ kind: 'error', text: '未配置 DeepSeek API Key，请设置 DEEPSEEK_API_KEY 后重试。' });
+        return;
+      }
+      const store = new SessionStore({ dir: paths.sessionsDir });
+      let session = sessionRef.current;
+      if (!session) {
+        session = options.session ? await store.load(options.session) : null;
+        if (!session) session = await store.create(config.projectRoot, config.model);
+        sessionRef.current = session;
+      }
+      const resumeMessages = session.messages || [];
+      const controller = new AbortController();
+      controllerRef.current = controller;
+      startedAtRef.current = Date.now();
+      setStats({ iterations: 0, toolCalls: 0, tokens: '0 in / 0 out' });
+      setExpandedThinking(false);
+      setRunning(true);
+      addItem({ kind: 'user', text: promptText });
 
-    const requestPermission = async (request: PermissionRequest) => {
-      return new Promise<'allow_once' | 'allow_session' | 'allow_rule' | 'deny'>((resolve) => {
-        setActivePrompt({ kind: 'permission', request, resolve });
-      });
-    };
-    const onPlanApproval = async (plan: Plan) => {
-      return new Promise<'approve' | 'reject' | 'edit'>((resolve) => {
-        setActivePrompt({ kind: 'plan', plan, resolve });
-      });
-    };
-    const askUser = async (question: string) => {
-      return new Promise<string>((resolve) => {
-        setActivePrompt({ kind: 'ask', question, resolve });
-      });
-    };
+      const requestPermission = async (request: PermissionRequest) => {
+        return new Promise<'allow_once' | 'allow_session' | 'allow_rule' | 'deny'>((resolve) => {
+          setActivePrompt({ kind: 'permission', request, resolve });
+        });
+      };
+      const onPlanApproval = async (plan: Plan) => {
+        return new Promise<'approve' | 'reject' | 'edit'>((resolve) => {
+          setActivePrompt({ kind: 'plan', plan, resolve });
+        });
+      };
+      const askUser = async (question: string) => {
+        return new Promise<string>((resolve) => {
+          setActivePrompt({ kind: 'ask', question, resolve });
+        });
+      };
 
-    const result = await runAgent({
-      prompt: promptText,
-      projectRoot: config.projectRoot,
-      model: config.model,
-      apiKey,
-      apiBase: config.apiBase,
-      mode: config.mode,
-      sandboxMode: config.sandboxMode,
-      maxIterations: config.maxIterations,
-      deepThink: config.deepThink,
-      reasoningEffort: config.reasoningEffort,
-      toolChoice: config.toolChoice,
-      tools: getTools(),
-      sessionId: session.id,
-      resumeMessages,
-      signal: controller.signal,
-      onEvent: handleEvent,
-      requestPermission,
-      onPlanApproval,
-      askUser,
-    });
-    await saveSession(session, result.messages, result.text);
-    if (result.aborted) addItem({ kind: 'system', text: '任务已取消' });
-    setRunning(false);
-    controllerRef.current = null;
-    setInput('');
-  }, [addItem, appendAssistant, handleEvent, model, mode, options, sandbox, saveSession, deepThink]);
+      const result = await runAgent({
+        prompt: promptText,
+        projectRoot: config.projectRoot,
+        model: config.model,
+        apiKey,
+        apiBase: config.apiBase,
+        mode: config.mode,
+        sandboxMode: config.sandboxMode,
+        maxIterations: config.maxIterations,
+        deepThink: config.deepThink,
+        reasoningEffort: config.reasoningEffort,
+        toolChoice: config.toolChoice,
+        tools: getTools(),
+        sessionId: session.id,
+        resumeMessages,
+        signal: controller.signal,
+        onEvent: handleEvent,
+        requestPermission,
+        onPlanApproval,
+        askUser,
+      });
+      await saveSession(session, result.messages, result.text);
+      if (result.aborted) addItem({ kind: 'system', text: '任务已取消' });
+      setRunning(false);
+      controllerRef.current = null;
+      setInput('');
+    },
+    [addItem, appendAssistant, handleEvent, model, mode, options, sandbox, saveSession, deepThink],
+  );
 
   const submit = useCallback(() => {
     const value = input.trim();
@@ -240,11 +323,16 @@ function App({ options }: { options: CliOptions }) {
     const activePrompt = promptRef.current;
     if (activePrompt) {
       if (activePrompt.kind === 'permission') {
-        const decision = keyInput === 'y' || keyInput === 'Y' ? 'allow_once'
-          : keyInput === 'a' || keyInput === 'A' ? 'allow_session'
-            : keyInput === 'r' || keyInput === 'R' ? 'allow_rule'
-              : keyInput === 'n' || keyInput === 'N' || key.escape ? 'deny'
-                : undefined;
+        const decision =
+          keyInput === 'y' || keyInput === 'Y'
+            ? 'allow_once'
+            : keyInput === 'a' || keyInput === 'A'
+              ? 'allow_session'
+              : keyInput === 'r' || keyInput === 'R'
+                ? 'allow_rule'
+                : keyInput === 'n' || keyInput === 'N' || key.escape
+                  ? 'deny'
+                  : undefined;
         if (decision) {
           activePrompt.resolve(decision);
           setActivePrompt(null);
@@ -252,10 +340,14 @@ function App({ options }: { options: CliOptions }) {
         return;
       }
       if (activePrompt.kind === 'plan') {
-        const decision = keyInput === 'a' || keyInput === 'A' ? 'approve'
-          : keyInput === 'r' || keyInput === 'R' ? 'reject'
-            : keyInput === 'e' || keyInput === 'E' ? 'edit'
-              : undefined;
+        const decision =
+          keyInput === 'a' || keyInput === 'A'
+            ? 'approve'
+            : keyInput === 'r' || keyInput === 'R'
+              ? 'reject'
+              : keyInput === 'e' || keyInput === 'E'
+                ? 'edit'
+                : undefined;
         if (decision) {
           activePrompt.resolve(decision);
           setActivePrompt(null);
@@ -287,6 +379,10 @@ function App({ options }: { options: CliOptions }) {
       }
       return;
     }
+    if (key.ctrl && keyInput === 't') {
+      setExpandedThinking((current) => !current);
+      return;
+    }
     if (key.return) {
       submit();
       return;
@@ -306,57 +402,60 @@ function App({ options }: { options: CliOptions }) {
   }
 
   return (
-    <Box flexDirection="column">
-      <Text color="cyan" bold>Auraxis CLI</Text>
-      <Text dimColor>model={model} mode={mode} sandbox={sandbox} deepThink={deepThink ? 'on' : 'off'} {running ? '· running' : ''}</Text>
-      <Box flexDirection="column" marginTop={1}>
+    <Box flexDirection="column" paddingX={1}>
+      <HeaderBar project={projectLabel} running={running} />
+      <Box flexDirection="column" marginTop={1} marginBottom={1}>
         {entries.map((item, index) => {
           switch (item.kind) {
             case 'user':
-              return <Text key={index} color="green">❯ {item.text}</Text>;
+              return <UserBlock key={index} text={item.text} />;
             case 'assistant':
-              return <Text key={index} color="white">{item.text}</Text>;
+              return <AssistantBlock key={index} text={item.text} />;
             case 'thinking':
-              return <Text key={index} color="yellow" dimColor>✦ {item.text}</Text>;
+              return <ThinkingBlock key={index} text={item.text} expanded={expandedThinking} />;
             case 'tool':
-              return <Text key={index} color={item.ok === false ? 'red' : 'cyan'} dimColor>{item.text}</Text>;
-            case 'error':
-              return <Text key={index} color="red">✗ {item.text}</Text>;
-            case 'system':
-              return <Text key={index} color="magenta">ℹ {item.text}</Text>;
+              return (
+                <ToolBlock
+                  key={index}
+                  name={item.toolName || 'Tool'}
+                  summary={item.text}
+                  status={item.status}
+                  ok={item.ok}
+                  error={item.error}
+                  duration={item.duration}
+                />
+              );
             case 'plan':
-              return <Text key={index} color="blue">{item.text}</Text>;
+              return <PlanBlock key={index} plan={item.plan || { tasks: [], summary: item.text }} />;
+            case 'error':
+              return <ErrorBlock key={index} text={item.text} />;
+            case 'system':
+              return <SystemBlock key={index} text={item.text} />;
             default:
               return null;
           }
         })}
       </Box>
-      <Box marginTop={1}>
-        <Text color={running ? 'yellow' : 'green'}>{running ? '● ' : '❯ '}</Text>
-        <Text>{input || (running ? '执行中，Ctrl+C 取消' : '输入任务，/help 查看命令')}</Text>
-      </Box>
-      {prompt?.kind === 'permission' && (
-        <Box borderStyle="round" borderColor="yellow" paddingX={1} marginTop={1}>
-          <Text>
-            {prompt.request.tool} · {prompt.request.summary}{'\n'}
-            <Text color="yellow">[y]允许一次 [a]允许本会话 [r]允许规则 [n]拒绝</Text>
-          </Text>
-        </Box>
-      )}
-      {prompt?.kind === 'plan' && (
-        <Box borderStyle="round" borderColor="blue" paddingX={1} marginTop={1}>
-          <Text>
-            {formatPlan(prompt.plan)}{'\n'}
-            <Text color="blue">[a]批准 [r]拒绝 [e]编辑</Text>
-          </Text>
-        </Box>
-      )}
-      {prompt?.kind === 'ask' && (
-        <Box borderStyle="round" borderColor="green" paddingX={1} marginTop={1}>
-          <Text>{prompt.question}{'\n'}回答后按 Enter</Text>
-        </Box>
-      )}
-      {exitArmed && <Text color="yellow">再按 Ctrl+C 退出</Text>}
+      <PromptBar input={input} running={running} />
+      {prompt?.kind === 'permission' ? <PermissionBlock request={prompt.request} /> : null}
+      {prompt?.kind === 'plan' ? (
+        <>
+          <PlanBlock plan={prompt.plan} />
+          <Text color="blue">[a]批准全部 · [r]拒绝 · [e]编辑（将在后续版本开放）</Text>
+        </>
+      ) : null}
+      {prompt?.kind === 'ask' ? <AskBlock question={prompt.question} /> : null}
+      {exitArmed ? <Text color="yellow">按 Ctrl+C 确认退出</Text> : null}
+      <StatusBar
+        model={model}
+        mode={mode}
+        sandbox={sandbox}
+        deepThink={deepThink}
+        running={running}
+        iterations={stats.iterations}
+        toolCalls={stats.toolCalls}
+        tokens={`${elapsed}s · ${stats.tokens}`}
+      />
     </Box>
   );
 }
