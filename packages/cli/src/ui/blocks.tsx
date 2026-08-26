@@ -487,7 +487,9 @@ export function RichHomeCard({
   const theme = useTheme();
   const [sessionSeconds, setSessionSeconds] = useState(0);
   const home = os.homedir();
+  const { stdout } = useStdout();
   const displayProject = project.startsWith(home) ? `~${project.slice(home.length)}` : project;
+  const cardWidth = Math.min(stdout.columns || 80, 72);
   useEffect(() => {
     const timer = setInterval(() => setSessionSeconds((current) => current + 1), 1000);
     return () => clearInterval(timer);
@@ -629,7 +631,9 @@ export function HomeCard({
   const theme = useTheme();
   const [sessionSeconds, setSessionSeconds] = useState(0);
   const home = os.homedir();
+  const { stdout } = useStdout();
   const displayProject = project.startsWith(home) ? `~${project.slice(home.length)}` : project;
+  const cardWidth = Math.min(stdout.columns || 80, 72);
 
   useEffect(() => {
     const timer = setInterval(() => setSessionSeconds((current) => current + 1), 1000);
@@ -643,17 +647,17 @@ export function HomeCard({
     { icon: '◈', command: '/agents', description: '多 Agent' },
     { icon: '⛁', command: '/mcp', description: '扩展集成' },
   ];
-  const fullDivider = Array.from({ length: 6 }, () => '│').join('\n');
+  const fullDivider = Array.from({ length: 8 }, () => '│').join('\n');
 
   return (
-    <Box flexDirection="column">
-      <Panel color={theme.brand} border="round">
+    <Box flexDirection="column" width={cardWidth}>
+      <Panel color={theme.brand} border="round" width={cardWidth}>
         <Box flexDirection="row">
           <Box flexDirection="column">
             <Text color={theme.brand} bold>
               ❯_ Auraxis Agent CLI
             </Text>
-            <Box flexDirection="row">
+            <Box flexDirection="row" marginTop={1}>
               {commands.map((command, index) => (
                 <CommandChip
                   key={command.command}
@@ -663,7 +667,7 @@ export function HomeCard({
                 />
               ))}
             </Box>
-            <Box>
+            <Box marginTop={1}>
               <Text color={theme.muted}>
                 Tab 切换命令 · ← → 选择 · Enter 执行 · 1-5 直达
               </Text>
@@ -681,7 +685,9 @@ export function HomeCard({
           </Box>
         </Box>
       </Panel>
-      <PromptBar input={input} running={running} />
+      <Box width={cardWidth}>
+        <PromptBar input={input} running={running} />
+      </Box>
     </Box>
   );
 }
