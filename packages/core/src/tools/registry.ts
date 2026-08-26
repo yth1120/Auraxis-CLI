@@ -4,6 +4,7 @@ import { runFileTools, readFileTool, readImageFileTool, writeFileTool, editFileT
 import { bashTool, pwshTool } from './shell.js';
 import { webFetchTool, webSearchTool } from './web.js';
 import { todoWriteTool } from './todo.js';
+import { gitStatusTool, gitDiffTool, gitLogTool, gitCommitTool } from './git.js';
 
 export interface ToolContext {
   projectRoot: string;
@@ -13,6 +14,7 @@ export interface ToolContext {
   setTodos: (todos: PlanTask[]) => void;
   signal?: AbortSignal;
   mcp?: McpHost;
+  runSubAgent?: (prompt: string, description?: string) => Promise<string>;
 }
 
 export interface ToolOutput {
@@ -226,6 +228,49 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     danger: 'read',
     parameters: { type: 'object', properties: {} },
   },
+  {
+    name: 'Agent',
+    description: '启动一个子 Agent 自主处理复杂任务，并返回其最终结果。',
+    danger: 'agent',
+    parameters: {
+      type: 'object',
+      properties: {
+        prompt: { type: 'string', description: '子 Agent 的任务' },
+        description: { type: 'string', description: '子 Agent 的简短说明' },
+      },
+      required: ['prompt'],
+    },
+    required: ['prompt'],
+  },
+  {
+    name: 'GitStatus',
+    description: '查看当前 Git 工作区状态。',
+    danger: 'read',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'GitDiff',
+    description: '查看当前未提交的文件变更统计。',
+    danger: 'read',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'GitLog',
+    description: '查看最近 20 条 Git 提交记录。',
+    danger: 'read',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'GitCommit',
+    description: '暂存所有改动并创建 Git 提交。',
+    danger: 'write',
+    parameters: {
+      type: 'object',
+      properties: { message: { type: 'string', description: '提交信息' } },
+      required: ['message'],
+    },
+    required: ['message'],
+  },
 ];
 
 export const TOOL_RUNNERS = new Map<string, ToolRunner>([
@@ -256,9 +301,25 @@ export const TOOL_RUNNERS = new Map<string, ToolRunner>([
         tools: TOOL_DEFINITIONS.map((tool) => tool.name),
       },
       null,
-      2,
+    2,
     ),
   })],
+  ['Agent', async (input, ctx) => {
+    const prompt = typeof input.prompt === 'string' ? input.prompt : '';
+    if (!prompt) return { content: '缺少 prompt', artifact: null };
+    if (!ctx.runSubAgent) return { content: '当前运行时不支持子 Agent', artifact: null };
+    const description = typeof input.description === 'string' ? input.description : '子任务';
+    try {
+      const output = await ctx.runSubAgent(prompt, description);
+      return { content: output, artifact: null };
+    } catch (error) {
+      return { content: `子 Agent 失败: ${error instanceof Error ? error.message : String(error)}`, artifact: null };
+    }
+  }],
+  ['GitStatus', gitStatusTool],
+  ['GitDiff', gitDiffTool],
+  ['GitLog', gitLogTool],
+  ['GitCommit', gitCommitTool],
 ]);
 
 export function getTools(): ToolDefinition[] {

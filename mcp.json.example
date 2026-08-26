@@ -1,0 +1,9 @@
+{
+  "servers": [
+    {
+      "name": "deepseek-harness",
+      "command": "npx.cmd",
+      "args": ["-y", "deepseek-harness-mcp"]
+    }
+  ]
+}

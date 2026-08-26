@@ -93,6 +93,25 @@ export async function runAgent(options: RunOptions): Promise<RunResult> {
     mcp: options.mcp,
   };
 
+  const runSubAgent = async (prompt: string, description?: string): Promise<string> => {
+    const depth = options.subAgentDepth ?? 0;
+    if (depth >= 2) throw new Error('子 Agent 嵌套深度超过上限');
+    emit({ type: 'system_message', level: 'info', content: `正在启动子 Agent: ${description || '未命名任务'}` });
+    const subResult = await runAgent({
+      ...options,
+      prompt,
+      sessionId: `sub-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+      resumeMessages: [],
+      subAgentDepth: depth + 1,
+      onEvent: (event) => {
+        if (event.type === 'error') emit({ type: 'system_message', level: 'warning', content: `[子 Agent] ${event.error}` });
+      },
+    });
+    emit({ type: 'system_message', level: 'info', content: `子 Agent 完成: ${description || '未命名任务'}` });
+    return subResult.text;
+  };
+  context.runSubAgent = runSubAgent;
+
   if (options.mode === 'plan') {
     try {
       const plan = await generatePlan(llm, options.prompt, options.projectRoot, options.signal);

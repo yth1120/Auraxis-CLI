@@ -37,6 +37,24 @@ auraxis --cwd D:/projects/demo
 auraxis doctor                   # 检查配置
 ```
 
+## MCP
+
+将以下文件放到 `~/.auraxis/mcp.json`，或在项目 `.auraxis/mcp.json` 中配置：
+
+```json
+{
+  "servers": [
+    {
+      "name": "deepseek-harness",
+      "command": "npx.cmd",
+      "args": ["-y", "deepseek-harness-mcp"]
+    }
+  ]
+}
+```
+
+MCP 工具会自动出现在 Agent 工具列表中，并在执行前经过同样的权限审批。
+
 ## 架构
 
 ```text

@@ -93,7 +93,7 @@ export interface LlmClient {
   chat(request: LlmRequest): Promise<LlmResult>;
 }
 
-export type ToolDanger = 'read' | 'write' | 'exec' | 'network' | 'internal' | 'mcp';
+export type ToolDanger = 'read' | 'write' | 'exec' | 'network' | 'internal' | 'mcp' | 'agent';
 
 export interface ToolDefinition {
   name: string;
@@ -159,6 +159,7 @@ export interface RunOptions {
   toolChoice?: ToolChoice;
   tools: ToolDefinition[];
   mcp?: McpHost;
+  subAgentDepth?: number;
   llm?: LlmClient;
   sessionId: string;
   resumeMessages?: ChatMessage[];

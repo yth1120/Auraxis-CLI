@@ -74,5 +74,40 @@ describe('runAgent', () => {
     expect(result.text).toBe('done');
     await expect(fs.stat(path.join(root, 'out.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
-});
 
+  it('runs a nested subagent through the Agent tool', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'auraxis-subagent-'));
+    class SubAgentLlm implements LlmClient {
+      calls = 0;
+      async chat(request: LlmRequest): Promise<LlmResult> {
+        this.calls += 1;
+        if (this.calls === 1) {
+          return {
+            content: '',
+            reasoning: '',
+            toolCalls: [{ id: 'call-agent', name: 'Agent', args: { prompt: '完成子任务', description: 'test subagent' } }],
+          };
+        }
+        if (this.calls === 2) return { content: '<FINAL_ANSWER>子任务完成', reasoning: '', toolCalls: [] };
+        return { content: '<FINAL_ANSWER>父任务完成', reasoning: '', toolCalls: [] };
+      }
+    }
+    const events: string[] = [];
+    const result = await runAgent({
+      prompt: '执行父任务',
+      projectRoot: root,
+      model: 'deepseek-v4-pro',
+      apiKey: 'test',
+      apiBase: 'https://example.invalid',
+      mode: 'auto',
+      sandboxMode: 'workspace-write',
+      tools: getTools(),
+      llm: new SubAgentLlm(),
+      sessionId: 's-parent',
+      onEvent: (event) => events.push(event.type),
+    });
+    expect(result.text).toBe('父任务完成');
+    expect(result.toolCallCount).toBe(1);
+    expect(events).toContain('system_message');
+  });
+});

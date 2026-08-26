@@ -72,6 +72,8 @@ export function permissionDescription(danger: ToolDanger): string {
       return '访问网络';
     case 'internal':
       return '内部状态';
+    case 'agent':
+      return '启动子 Agent';
     default:
       return '危险操作';
   }
