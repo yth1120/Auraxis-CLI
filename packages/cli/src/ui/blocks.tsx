@@ -638,9 +638,6 @@ export function HomeCard({
               <Text color={theme.brand} bold>
                 ❯_ Auraxis Agent CLI
               </Text>
-              <Text color={theme.success} bold>
-                ● 独立运行 · v{version}
-              </Text>
             </Box>
             <Box flexDirection="row" marginTop={1}>
               {commands.map((command, index) => (
