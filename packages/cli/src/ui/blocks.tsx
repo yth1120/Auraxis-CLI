@@ -579,7 +579,7 @@ function CommandChip({
       paddingX={1}
       marginRight={1}
     >
-      <Text color={selected ? theme.brand : theme.info} bold={selected} wrap="truncate">
+      <Text color={selected ? theme.brand : theme.info} bold={selected} wrap="wrap">
         {icon} {label}
       </Text>
     </Box>
@@ -630,37 +630,45 @@ export function HomeCard({
   ];
 
   return (
-    <Panel color={theme.brand} border="round">
-      <Box flexDirection="column">
-        <Box flexDirection="row" justifyContent="space-between">
-          <Text color={theme.brand} bold>
-            ❯_ Auraxis Agent CLI
-          </Text>
-          <Text color={theme.success} bold>
-            ● 已连接 · v{version}
-          </Text>
+    <Box flexDirection="column">
+      <Panel color={theme.brand} border="round">
+        <Box flexDirection="row">
+          <Box flexDirection="column" flexGrow={1}>
+            <Box flexDirection="row" justifyContent="space-between">
+              <Text color={theme.brand} bold>
+                ❯_ Auraxis Agent CLI
+              </Text>
+              <Text color={theme.success} bold>
+                ● 已连接 · v{version}
+              </Text>
+            </Box>
+            <Box flexDirection="row" marginTop={1}>
+              {commands.map((command, index) => (
+                <CommandChip
+                  key={command.command}
+                  icon={command.icon}
+                  label={command.command}
+                  selected={homeFocus === 'commands' && selectedCommand === index}
+                />
+              ))}
+            </Box>
+            <Box marginTop={1}>
+              <Text color={theme.muted}>
+                Tab 切换命令 · ← → 选择 · Enter 执行 · 1-5 直达
+              </Text>
+            </Box>
+          </Box>
+          <Box flexDirection="column" marginLeft={2}>
+            <Text color={theme.muted}>{displayProject}</Text>
+            <Text color={theme.muted}>{branch}</Text>
+            <Text color={theme.muted}>{model}</Text>
+            <Text color={theme.muted}>{appMode.toUpperCase()}</Text>
+            <Text color={theme.brand}>{formatSessionTime(sessionSeconds)}</Text>
+          </Box>
         </Box>
-        <Text color={theme.muted}>
-          {displayProject} · {branch} · {model} · {appMode.toUpperCase()} · {formatSessionTime(sessionSeconds)}
-        </Text>
-        <Box flexDirection="row" marginTop={1}>
-          {commands.map((command, index) => (
-            <CommandChip
-              key={command.command}
-              icon={command.icon}
-              label={command.command}
-              selected={homeFocus === 'commands' && selectedCommand === index}
-            />
-          ))}
-        </Box>
-        <Box marginTop={1}>
-          <PromptBar input={input} running={running} bordered={false} />
-        </Box>
-        <Text color={theme.muted}>
-          Tab 切换命令 · ← → 选择 · Enter 执行 · 1-5 直达
-        </Text>
-      </Box>
-    </Panel>
+      </Panel>
+      <PromptBar input={input} running={running} />
+    </Box>
   );
 }
 
