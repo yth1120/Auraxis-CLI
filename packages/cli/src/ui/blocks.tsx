@@ -562,7 +562,6 @@ export function HomeCard({
 }) {
   const theme = useTheme();
   const [sessionSeconds, setSessionSeconds] = useState(0);
-  const [cursorOn, setCursorOn] = useState(true);
   const home = os.homedir();
   const { stdout } = useStdout();
   const wideFooter = (stdout.columns || 80) >= 108;
@@ -570,11 +569,7 @@ export function HomeCard({
 
   useEffect(() => {
     const timer = setInterval(() => setSessionSeconds((current) => current + 1), 1000);
-    const cursor = setInterval(() => setCursorOn((current) => !current), 500);
-    return () => {
-      clearInterval(timer);
-      clearInterval(cursor);
-    };
+    return () => clearInterval(timer);
   }, []);
 
   return (
@@ -599,16 +594,6 @@ export function HomeCard({
             <Text color={theme.text}>
               Tips: 输入自然语言开始对话，或使用 / 命令
             </Text>
-            <Box flexDirection="row">
-              <Text color={theme.info} bold>
-                &gt;
-              </Text>
-              <Text color={theme.text}>
-                {' '}
-                {input}
-              </Text>
-              <Text color={theme.text}>{cursorOn ? '▌' : ' '}</Text>
-            </Box>
           </Box>
           <Text color={theme.muted}>
             {'│\n│\n│\n│\n│'}
@@ -662,6 +647,7 @@ export function HomeCard({
           </Box>
         )}
       </Panel>
+      <PromptBar input={input} running={running} />
     </Box>
   );
 }
