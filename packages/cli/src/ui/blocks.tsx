@@ -489,7 +489,7 @@ export function RichHomeCard({
   const home = os.homedir();
   const { stdout } = useStdout();
   const displayProject = project.startsWith(home) ? `~${project.slice(home.length)}` : project;
-  const cardWidth = Math.min(stdout.columns || 80, 88);
+  const cardWidth = stdout.columns || 80;
   useEffect(() => {
     const timer = setInterval(() => setSessionSeconds((current) => current + 1), 1000);
     return () => clearInterval(timer);
@@ -633,7 +633,7 @@ export function HomeCard({
   const home = os.homedir();
   const { stdout } = useStdout();
   const displayProject = project.startsWith(home) ? `~${project.slice(home.length)}` : project;
-  const cardWidth = Math.min(stdout.columns || 80, 88);
+  const cardWidth = stdout.columns || 80;
 
   useEffect(() => {
     const timer = setInterval(() => setSessionSeconds((current) => current + 1), 1000);
