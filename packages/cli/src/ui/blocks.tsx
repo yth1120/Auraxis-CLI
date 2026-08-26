@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { Box, Text } from 'ink';
+import { Box, Text, useStdout } from 'ink';
 import type { PermissionRequest, Plan } from '@auraxis/core';
 
 type BorderStyle = 'round' | 'single' | 'double';
@@ -116,15 +116,21 @@ function Spinner() {
 
 export function PromptBar({ input, running }: { input: string; running: boolean }) {
   const theme = useTheme();
+  const { stdout } = useStdout();
+  const columns = stdout.columns || 80;
+  const maxInput = Math.max(12, columns - 8);
+  const raw = input || (running ? '执行中 · Ctrl+C 取消' : '输入任务 · /help 查看命令');
+  const oneLine = raw.replace(/\r?\n/g, '⏎');
+  const display = oneLine.length > maxInput ? `${oneLine.slice(0, maxInput - 1)}…` : oneLine;
   return (
     <Panel color={running ? theme.warning : theme.success} border="single">
       <Box flexDirection="row">
         <Text color={running ? theme.warning : theme.success} bold>
           {running ? '●' : '❯'}
         </Text>
-        <Text color={running ? theme.warning : theme.text} wrap="wrap">
-          {'  '}
-          {input || (running ? '执行中 · Ctrl+C 取消' : '输入任务 · /help 查看命令')}
+        <Text color={running ? theme.warning : theme.text} wrap="truncate">
+          {' '}
+          {display}
         </Text>
       </Box>
     </Panel>
