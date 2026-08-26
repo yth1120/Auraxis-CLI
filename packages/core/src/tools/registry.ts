@@ -5,6 +5,8 @@ import { bashTool, pwshTool } from './shell.js';
 import { webFetchTool, webSearchTool } from './web.js';
 import { todoWriteTool } from './todo.js';
 import { gitStatusTool, gitDiffTool, gitLogTool, gitCommitTool } from './git.js';
+import type { SkillRecord } from '../skills.js';
+import { reviewArtifactTool } from './review.js';
 
 export interface ToolContext {
   projectRoot: string;
@@ -15,6 +17,8 @@ export interface ToolContext {
   signal?: AbortSignal;
   mcp?: McpHost;
   runSubAgent?: (prompt: string, description?: string) => Promise<string>;
+  listSkills?: () => Promise<SkillRecord[]>;
+  readSkill?: (id: string) => Promise<string>;
 }
 
 export interface ToolOutput {
@@ -271,6 +275,35 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     },
     required: ['message'],
   },
+  {
+    name: 'ListSkills',
+    description: '列出当前项目可用的本地技能。',
+    danger: 'read',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'ReadSkill',
+    description: '读取指定技能的完整 SKILL.md 内容。',
+    danger: 'read',
+    parameters: {
+      type: 'object',
+      properties: { skill_id: { type: 'string' } },
+      required: ['skill_id'],
+    },
+    required: ['skill_id'],
+  },
+  {
+    name: 'ReviewArtifact',
+    description: '运行测试、类型检查或构建来验证当前修改。默认检测 package.json 中的 check/test/build 脚本。',
+    danger: 'exec',
+    parameters: {
+      type: 'object',
+      properties: {
+        command: { type: 'string', description: '可选，自定义验证命令' },
+        timeout_ms: { type: 'number' },
+      },
+    },
+  },
 ];
 
 export const TOOL_RUNNERS = new Map<string, ToolRunner>([
@@ -320,6 +353,16 @@ export const TOOL_RUNNERS = new Map<string, ToolRunner>([
   ['GitDiff', gitDiffTool],
   ['GitLog', gitLogTool],
   ['GitCommit', gitCommitTool],
+  ['ListSkills', async (_, ctx) => {
+    const skills = (await ctx.listSkills?.()) || [];
+    return { content: skills.map((skill) => `${skill.id} · ${skill.name}\n${skill.description}`).join('\n') || '暂无技能' };
+  }],
+  ['ReadSkill', async (input, ctx) => {
+    const id = typeof input.skill_id === 'string' ? input.skill_id : '';
+    const content = id ? await ctx.readSkill?.(id) : undefined;
+    return { content: content || `未找到技能 ${id}` };
+  }],
+  ['ReviewArtifact', reviewArtifactTool],
 ]);
 
 export function getTools(): ToolDefinition[] {

@@ -5,6 +5,7 @@ import { makeRequestId, truncateText, type AgentEvent } from '../events.js';
 import { getTool, getTools, TOOL_DEFINITIONS, summarizeToolInput, type ToolContext } from '../tools/registry.js';
 import { PermissionGate } from './permissions.js';
 import { generatePlan } from './planner.js';
+import { scanSkills, readSkillContent, type SkillRecord } from '../skills.js';
 import type { ChatMessage, ChatContentPart, Plan, PlanDecision, RunOptions, RunResult, ToolDefinition } from '../types.js';
 import { modelSupportsImages, type McpHost, type JsonObject } from '../types.js';
 
@@ -91,6 +92,13 @@ export async function runAgent(options: RunOptions): Promise<RunResult> {
     },
     signal: options.signal,
     mcp: options.mcp,
+  };
+  const skills = await scanSkills(options.projectRoot).catch(() => []);
+  const skillMap = new Map<string, SkillRecord>(skills.map((skill) => [skill.id, skill]));
+  context.listSkills = async () => skills;
+  context.readSkill = async (id) => {
+    const skill = skillMap.get(id);
+    return skill ? readSkillContent(skill) : '';
   };
 
   const runSubAgent = async (prompt: string, description?: string): Promise<string> => {

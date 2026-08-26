@@ -2,6 +2,7 @@ export * from './types.js';
 export * from './events.js';
 export * from './config.js';
 export * from './secrets.js';
+export * from './skills.js';
 export * from './llm.js';
 export * from './mcp/manager.js';
 export * from './tools/registry.js';
