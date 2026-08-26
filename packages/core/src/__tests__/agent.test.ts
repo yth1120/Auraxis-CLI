@@ -110,4 +110,24 @@ describe('runAgent', () => {
     expect(result.toolCallCount).toBe(1);
     expect(events).toContain('system_message');
   });
+
+  it('blocks code writes in Work document mode', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'auraxis-work-mode-'));
+    const workLlm = new FakeLlm();
+    const result = await runAgent({
+      prompt: 'write code',
+      projectRoot: root,
+      model: 'deepseek-v4-pro',
+      apiKey: 'test',
+      apiBase: 'https://example.invalid',
+      mode: 'auto',
+      sandboxMode: 'workspace-write',
+      appMode: 'work',
+      tools: getTools(),
+      llm: workLlm,
+      sessionId: 's-work',
+    });
+    expect(result.toolCallCount).toBe(1);
+    await expect(fs.stat(path.join(root, 'out.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
 });

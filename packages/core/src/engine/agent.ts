@@ -6,7 +6,7 @@ import { getTool, getTools, TOOL_DEFINITIONS, summarizeToolInput, type ToolConte
 import { PermissionGate } from './permissions.js';
 import { generatePlan } from './planner.js';
 import { scanSkills, readSkillContent, type SkillRecord } from '../skills.js';
-import type { ChatMessage, ChatContentPart, Plan, PlanDecision, RunOptions, RunResult, ToolDefinition } from '../types.js';
+import type { AppMode, ChatMessage, ChatContentPart, Plan, PlanDecision, RunOptions, RunResult, ToolDefinition } from '../types.js';
 import { modelSupportsImages, type McpHost, type JsonObject } from '../types.js';
 
 async function readInstructionFile(root: string, names: string[]): Promise<string> {
@@ -22,11 +22,23 @@ async function readInstructionFile(root: string, names: string[]): Promise<strin
   return '';
 }
 
-export function buildSystemPrompt(projectRoot: string, tools: ToolDefinition[]): string {
+function appModeGuide(mode?: AppMode): string {
+  switch (mode) {
+    case 'work':
+      return '当前为 Work 文档协作模式：默认先澄清需求，禁止修改代码文件和执行高危命令；文档工具优先。';
+    case 'code':
+      return '当前为 Code 模式：可以通过 RunCode 编排工具、读取代码、运行测试并修复问题。';
+    default:
+      return '当前为 Chat 模式：日常对话、代码问答与轻量任务。';
+  }
+}
+
+export function buildSystemPrompt(projectRoot: string, tools: ToolDefinition[], appMode?: AppMode): string {
   return [
     '你是 Auraxis Agent，一个运行在用户终端中的编码智能体。',
     `项目根目录: ${path.resolve(projectRoot)}`,
     `平台: ${process.platform} / Node ${process.version}`,
+    appModeGuide(appMode),
     '',
     '工作方式:',
     '- 先阅读相关文件并确认事实，不要凭猜测回答。',
@@ -70,7 +82,7 @@ export async function runAgent(options: RunOptions): Promise<RunResult> {
     projectRoot: options.projectRoot,
     requestPermission: options.requestPermission,
   });
-  const systemPrompt = buildSystemPrompt(options.projectRoot, options.tools);
+  const systemPrompt = buildSystemPrompt(options.projectRoot, options.tools, options.appMode);
   let messages = ensureSystemMessage([...(options.resumeMessages || [])], systemPrompt);
   if (messages.length === 0 || messages.at(-1)?.role !== 'user') {
     messages.push({ role: 'user', content: options.prompt });
@@ -190,6 +202,15 @@ export async function runAgent(options: RunOptions): Promise<RunResult> {
         return { content: await options.mcp.call(mcpDefinition.mcpServer, call.name, input), artifact: null };
       } } : undefined);
       emit({ type: 'tool_start', toolName: call.name, input: call.args });
+      const workRestricted =
+        options.appMode === 'work' &&
+        ['Write', 'Edit', 'StrReplaceEditor', 'Bash', 'Pwsh', 'GitCommit', 'ReviewArtifact', 'Agent'].includes(call.name);
+      if (workRestricted) {
+        const error = 'Work 模式禁止修改代码或执行高危命令';
+        emit({ type: 'tool_error', toolName: call.name, error });
+        messages.push({ role: 'tool', tool_call_id: call.id, name: call.name, content: JSON.stringify({ ok: false, error }) });
+        continue;
+      }
       if (!tool) {
         const error = `未知工具: ${call.name}`;
         emit({ type: 'tool_error', toolName: call.name, error });

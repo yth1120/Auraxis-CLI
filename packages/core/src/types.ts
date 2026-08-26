@@ -4,6 +4,7 @@ export type ApprovalPolicy = 'ask' | 'plan' | 'auto';
 export type SandboxMode = 'read' | 'workspace-write' | 'full';
 export type ReasoningEffort = 'low' | 'high' | 'max';
 export type ToolChoice = 'auto' | 'none' | 'required' | string;
+export type AppMode = 'chat' | 'work' | 'code';
 
 export type JsonObject = Record<string, unknown>;
 
@@ -160,6 +161,7 @@ export interface RunOptions {
   tools: ToolDefinition[];
   mcp?: McpHost;
   subAgentDepth?: number;
+  appMode?: AppMode;
   llm?: LlmClient;
   sessionId: string;
   resumeMessages?: ChatMessage[];

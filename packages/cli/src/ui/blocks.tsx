@@ -597,6 +597,7 @@ export function HomeCard({
   input,
   homeFocus,
   selectedCommand,
+  appMode,
 }: {
   project: string;
   branch: string;
@@ -608,6 +609,7 @@ export function HomeCard({
   input: string;
   homeFocus: 'input' | 'commands';
   selectedCommand: number;
+  appMode: 'chat' | 'work' | 'code';
 }) {
   const theme = useTheme();
   const [sessionSeconds, setSessionSeconds] = useState(0);
@@ -620,11 +622,11 @@ export function HomeCard({
   }, []);
 
   const commands = [
-    { icon: '▣', command: '/chat', description: '开始对话' },
-    { icon: '◇', command: '/init', description: '初始化项目' },
-    { icon: '▸', command: '/run <file>', description: '运行文件' },
-    { icon: '☰', command: '/config', description: '配置设置' },
-    { icon: '?', command: '/help', description: '查看更多命令' },
+    { icon: '▣', command: '/chat', description: '对话' },
+    { icon: '▦', command: '/work', description: '文档协作' },
+    { icon: '⌘', command: '/code', description: '代码执行' },
+    { icon: '◈', command: '/agents', description: '多 Agent' },
+    { icon: '⛁', command: '/mcp', description: '扩展集成' },
   ];
 
   return (
@@ -639,7 +641,7 @@ export function HomeCard({
           </Text>
         </Box>
         <Text color={theme.muted}>
-          {displayProject} · {branch} · {model} · {formatSessionTime(sessionSeconds)}
+          {displayProject} · {branch} · {model} · {appMode.toUpperCase()} · {formatSessionTime(sessionSeconds)}
         </Text>
         <Box flexDirection="row" marginTop={1}>
           {commands.map((command, index) => (

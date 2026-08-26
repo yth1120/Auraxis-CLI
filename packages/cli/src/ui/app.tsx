@@ -15,6 +15,7 @@ import {
   SessionStore,
   summarizeToolInput,
   type AgentEvent,
+  type AppMode,
   type ChatMessage,
   type PermissionRequest,
   type Plan,
@@ -84,12 +85,13 @@ function App({ options }: { options: CliOptions }) {
   const [branch, setBranch] = useState('main');
   const [homeFocus, setHomeFocus] = useState<'input' | 'commands'>('input');
   const [selectedCommand, setSelectedCommand] = useState(0);
+  const [appMode, setAppMode] = useState<AppMode>('chat');
   const homeCommands = [
     { icon: '▣', command: '/chat' },
-    { icon: '◇', command: '/init' },
-    { icon: '▸', command: '/run <file>' },
-    { icon: '☰', command: '/config' },
-    { icon: '?', command: '/help' },
+    { icon: '▦', command: '/work' },
+    { icon: '⌘', command: '/code' },
+    { icon: '◈', command: '/agents' },
+    { icon: '⛁', command: '/mcp' },
   ];
   const [expandedThinking, setExpandedThinking] = useState(false);
   const [stats, setStats] = useState<Stats>({ iterations: 0, toolCalls: 0, tokens: '0 in / 0 out' });
@@ -325,6 +327,7 @@ function App({ options }: { options: CliOptions }) {
         toolChoice: config.toolChoice,
         tools,
         mcp: mcpManager,
+        appMode,
         sessionId: session.id,
         resumeMessages,
         signal: controller.signal,
@@ -339,7 +342,7 @@ function App({ options }: { options: CliOptions }) {
       controllerRef.current = null;
       setInput('');
     },
-    [addItem, appendAssistant, handleEvent, model, mode, options, sandbox, saveSession, deepThink],
+    [addItem, appendAssistant, handleEvent, model, mode, options, sandbox, saveSession, deepThink, appMode],
   );
 
   const submit = useCallback((valueOverride?: string) => {
@@ -353,7 +356,7 @@ function App({ options }: { options: CliOptions }) {
       if (command === 'help') {
         addItem({
           kind: 'system',
-          text: '/home /help /clear /quit /status /model <id> /mode <ask|plan|auto> /sandbox <mode> /deep-think <on|off> /theme <dark|light|neon|mono> /api-key <key> /chat /run <file> /init /config /tools /skills /mcp /doctor /sessions /history\nPgUp/PgDn 浏览历史 · Ctrl+T 展开思考 · Ctrl+C 取消',
+          text: '/chat /work /code /agents /mcp /skills /git /review /tools /doctor /sessions /history /model /mode /sandbox /deep-think /theme /api-key /home /clear /quit\nPgUp/PgDn 浏览历史 · Ctrl+T 展开思考 · Ctrl+C 取消',
         });
       } else if (command === 'clear') {
         setEntries([]);
@@ -361,7 +364,7 @@ function App({ options }: { options: CliOptions }) {
         void mcpRef.current?.close();
         exit();
       } else if (command === 'status') {
-        addItem({ kind: 'system', text: `model=${model} mode=${mode} sandbox=${sandbox} deepThink=${deepThink}` });
+        addItem({ kind: 'system', text: `appMode=${appMode} model=${model} permission=${mode} sandbox=${sandbox} deepThink=${deepThink}` });
       } else if (command === 'tools') {
         addItem({ kind: 'system', text: getTools().map((tool) => `${tool.name} [${tool.danger}]`).join('\n') });
       } else if (command === 'history') {
@@ -429,7 +432,20 @@ function App({ options }: { options: CliOptions }) {
           addItem({ kind: 'system', text: `已删除会话 ${body}` });
         })();
       } else if (command === 'chat') {
+        setAppMode('chat');
         void runPrompt(body || '请开始对话');
+      } else if (command === 'work') {
+        setAppMode('work');
+        addItem({ kind: 'system', text: '已切换到 Work 文档协作模式：代码写入与高危命令将被限制。' });
+      } else if (command === 'code') {
+        setAppMode('code');
+        addItem({ kind: 'system', text: '已切换到 Code 模式：可用 RunCode、工具编排与验证。' });
+      } else if (command === 'agents') {
+        addItem({ kind: 'system', text: 'Auraxis 多 Agent：支持 Agent 子任务、SendMessage、InterruptAgent、Report 与事件流。' });
+      } else if (command === 'review') {
+        void runPrompt('使用 ReviewArtifact 检查当前项目的测试、类型检查或构建。');
+      } else if (command === 'git') {
+        void runPrompt('使用 GitStatus、GitDiff、GitLog 检查当前仓库状态。');
       } else if (command === 'run' && body) {
         void runPrompt(`请运行文件 ${body}，并只给出结果摘要。`);
       } else if (command === 'init') {
@@ -626,6 +642,7 @@ function App({ options }: { options: CliOptions }) {
             input={input}
             homeFocus={homeFocus}
             selectedCommand={selectedCommand}
+            appMode={appMode}
           />
         ) : (
           <HeaderBar project={projectLabel} running={running} />
