@@ -579,6 +579,128 @@ export function HomeCard({
     const timer = setInterval(() => setSessionSeconds((current) => current + 1), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const footerCommands = [
+    { icon: '▣', command: '/chat', description: '开始对话' },
+    { icon: '◇', command: '/init', description: '初始化项目' },
+    { icon: '▸', command: '/run <file>', description: '运行文件' },
+    { icon: '☰', command: '/config', description: '配置设置' },
+    { icon: '?', command: '/help', description: '查看更多命令' },
+  ];
+
+  return (
+    <Box flexDirection="column">
+      <Panel color={theme.brand} border="round">
+        <Box flexDirection="row">
+          <Box flexDirection="column" flexGrow={1}>
+            <Box flexDirection="row" alignItems="center">
+              <Text color={theme.brand} bold>
+                ▲
+              </Text>
+              <Text color={theme.info} dimColor>
+                {' '}
+                ✦ ✧
+              </Text>
+              <Text color={theme.brand} bold>
+                {' '}
+                Auraxis
+              </Text>
+              <Text color={theme.text} bold>
+                {' '}Agent CLI
+              </Text>
+            </Box>
+            <Text color={theme.muted}>
+              智能协作 · 代码理解 · 自动化执行
+            </Text>
+            <Box flexDirection="row" marginTop={1}>
+              <Text color={theme.success} bold>
+                ● 已连接到 Auraxis Agent
+              </Text>
+              <Text color={theme.muted}>
+                {' '}· 版本 {version}
+              </Text>
+            </Box>
+          </Box>
+          <Text color={theme.muted}>
+            {'│\n│\n│\n│'}
+          </Text>
+          <Box flexDirection="column">
+            <Text color={theme.muted}>
+              ▣ 工作目录
+            </Text>
+            <Text color={theme.text}>
+              {displayProject}
+            </Text>
+            <Text color={theme.muted}>
+              ⑂ 当前分支
+            </Text>
+            <Text color={theme.text}>
+              {branch}
+            </Text>
+            <Text color={theme.muted}>
+              ◷ 会话时间
+            </Text>
+            <Text color={theme.brand}>
+              {formatSessionTime(sessionSeconds)}
+            </Text>
+          </Box>
+        </Box>
+      </Panel>
+      <Panel color={theme.muted} border="single">
+        <Box flexDirection="column">
+          <Box flexDirection="row">
+            {wideFooter
+              ? footerCommands.map((command) => (
+                  <QuickStartCard key={command.command} {...command} width={20} />
+                ))
+              : footerCommands.slice(0, 3).map((command) => (
+                  <QuickStartCard key={command.command} {...command} width={24} />
+                ))}
+          </Box>
+          {!wideFooter ? (
+            <Box flexDirection="row" marginTop={1}>
+              {footerCommands.slice(3).map((command) => (
+                <QuickStartCard key={command.command} {...command} width={34} />
+              ))}
+            </Box>
+          ) : null}
+        </Box>
+      </Panel>
+      <PromptBar input={input} running={running} />
+    </Box>
+  );
+}
+
+export function CompactHomeCard({
+  project,
+  branch,
+  model,
+  mode,
+  sandbox,
+  version,
+  running,
+  input,
+}: {
+  project: string;
+  branch: string;
+  model: string;
+  mode: string;
+  sandbox: string;
+  version: string;
+  running: boolean;
+  input: string;
+}) {
+  const theme = useTheme();
+  const [sessionSeconds, setSessionSeconds] = useState(0);
+  const home = os.homedir();
+  const { stdout } = useStdout();
+  const wideFooter = (stdout.columns || 80) >= 108;
+  const displayProject = project.startsWith(home) ? `~${project.slice(home.length)}` : project;
+
+  useEffect(() => {
+    const timer = setInterval(() => setSessionSeconds((current) => current + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
   const footerCommands = [
     { icon: '▣', command: '/chat', description: '开始对话' },
     { icon: '◇', command: '/init', description: '初始化项目' },
