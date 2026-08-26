@@ -136,15 +136,22 @@ export function PromptBar({ input, running }: { input: string; running: boolean 
         <Text color={running ? theme.warning : theme.success} bold>
           {running ? '●' : '❯'}
         </Text>
-        <Text
-          color={running ? theme.warning : theme.text}
-          dimColor={isPlaceholder}
-          wrap="truncate"
-        >
-          {' '}
-          {display}
-          {caret}
-        </Text>
+        {isPlaceholder ? (
+          <>
+            <Text color={running ? theme.warning : theme.text}>{caret}</Text>
+            <Text color={theme.muted} dimColor wrap="truncate">
+              {display}
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text color={running ? theme.warning : theme.text} wrap="truncate">
+              {' '}
+              {display}
+            </Text>
+            <Text color={running ? theme.warning : theme.text}>{caret}</Text>
+          </>
+        )}
       </Box>
     </Panel>
   );
