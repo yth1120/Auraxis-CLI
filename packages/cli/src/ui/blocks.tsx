@@ -115,7 +115,15 @@ function Spinner() {
   return <Text color="yellow">{frames[index]}</Text>;
 }
 
-export function PromptBar({ input, running }: { input: string; running: boolean }) {
+export function PromptBar({
+  input,
+  running,
+  bordered = true,
+}: {
+  input: string;
+  running: boolean;
+  bordered?: boolean;
+}) {
   const theme = useTheme();
   const { stdout } = useStdout();
   const columns = stdout.columns || 80;
@@ -131,30 +139,35 @@ export function PromptBar({ input, running }: { input: string; running: boolean 
   const display = oneLine.length > maxInput ? `${oneLine.slice(0, maxInput - 1)}…` : oneLine;
   const caret = running ? '' : cursorOn ? '▌' : ' ';
   const isPlaceholder = !input && !running;
-  return (
+  const body = (
+    <Box flexDirection="row">
+      <Text color={running ? theme.warning : theme.success} bold>
+        {running ? '●' : '❯'}
+      </Text>
+      {isPlaceholder ? (
+        <>
+          <Text color={running ? theme.warning : theme.text}>{caret}</Text>
+          <Text color={theme.muted} dimColor wrap="truncate">
+            {display}
+          </Text>
+        </>
+      ) : (
+        <>
+          <Text color={running ? theme.warning : theme.text} wrap="truncate">
+            {' '}
+            {display}
+          </Text>
+          <Text color={running ? theme.warning : theme.text}>{caret}</Text>
+        </>
+      )}
+    </Box>
+  );
+  return bordered ? (
     <Panel color={running ? theme.warning : theme.success} border="single">
-      <Box flexDirection="row">
-        <Text color={running ? theme.warning : theme.success} bold>
-          {running ? '●' : '❯'}
-        </Text>
-        {isPlaceholder ? (
-          <>
-            <Text color={running ? theme.warning : theme.text}>{caret}</Text>
-            <Text color={theme.muted} dimColor wrap="truncate">
-              {display}
-            </Text>
-          </>
-        ) : (
-          <>
-            <Text color={running ? theme.warning : theme.text} wrap="truncate">
-              {' '}
-              {display}
-            </Text>
-            <Text color={running ? theme.warning : theme.text}>{caret}</Text>
-          </>
-        )}
-      </Box>
+      {body}
     </Panel>
+  ) : (
+    body
   );
 }
 
@@ -549,6 +562,30 @@ export function RichHomeCard({
   );
 }
 
+function CommandChip({
+  icon,
+  label,
+  selected,
+}: {
+  icon: string;
+  label: string;
+  selected: boolean;
+}) {
+  const theme = useTheme();
+  return (
+    <Box
+      borderStyle="round"
+      borderColor={selected ? theme.brand : theme.muted}
+      paddingX={1}
+      marginRight={1}
+    >
+      <Text color={selected ? theme.brand : theme.info} bold={selected} wrap="truncate">
+        {icon} {label}
+      </Text>
+    </Box>
+  );
+}
+
 export function HomeCard({
   project,
   branch,
@@ -558,6 +595,8 @@ export function HomeCard({
   version,
   running,
   input,
+  homeFocus,
+  selectedCommand,
 }: {
   project: string;
   branch: string;
@@ -567,6 +606,84 @@ export function HomeCard({
   version: string;
   running: boolean;
   input: string;
+  homeFocus: 'input' | 'commands';
+  selectedCommand: number;
+}) {
+  const theme = useTheme();
+  const [sessionSeconds, setSessionSeconds] = useState(0);
+  const home = os.homedir();
+  const displayProject = project.startsWith(home) ? `~${project.slice(home.length)}` : project;
+
+  useEffect(() => {
+    const timer = setInterval(() => setSessionSeconds((current) => current + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const commands = [
+    { icon: '▣', command: '/chat', description: '开始对话' },
+    { icon: '◇', command: '/init', description: '初始化项目' },
+    { icon: '▸', command: '/run <file>', description: '运行文件' },
+    { icon: '☰', command: '/config', description: '配置设置' },
+    { icon: '?', command: '/help', description: '查看更多命令' },
+  ];
+
+  return (
+    <Panel color={theme.brand} border="round">
+      <Box flexDirection="column">
+        <Box flexDirection="row" justifyContent="space-between">
+          <Text color={theme.brand} bold>
+            ❯_ Auraxis Agent CLI
+          </Text>
+          <Text color={theme.success} bold>
+            ● 已连接 · v{version}
+          </Text>
+        </Box>
+        <Text color={theme.muted}>
+          {displayProject} · {branch} · {model} · {formatSessionTime(sessionSeconds)}
+        </Text>
+        <Box flexDirection="row" marginTop={1}>
+          {commands.map((command, index) => (
+            <CommandChip
+              key={command.command}
+              icon={command.icon}
+              label={command.command}
+              selected={homeFocus === 'commands' && selectedCommand === index}
+            />
+          ))}
+        </Box>
+        <Box marginTop={1}>
+          <PromptBar input={input} running={running} bordered={false} />
+        </Box>
+        <Text color={theme.muted}>
+          Tab 切换命令 · ← → 选择 · Enter 执行 · 1-5 直达
+        </Text>
+      </Box>
+    </Panel>
+  );
+}
+
+export function LegacyHomeCard({
+  project,
+  branch,
+  model,
+  mode,
+  sandbox,
+  version,
+  running,
+  input,
+  homeFocus,
+  selectedCommand,
+}: {
+  project: string;
+  branch: string;
+  model: string;
+  mode: string;
+  sandbox: string;
+  version: string;
+  running: boolean;
+  input: string;
+  homeFocus: 'input' | 'commands';
+  selectedCommand: number;
 }) {
   const theme = useTheme();
   const [sessionSeconds, setSessionSeconds] = useState(0);

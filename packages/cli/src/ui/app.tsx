@@ -82,6 +82,15 @@ function App({ options }: { options: CliOptions }) {
   const [theme, setTheme] = useState<ThemeName>('dark');
   const [showHome, setShowHome] = useState(true);
   const [branch, setBranch] = useState('main');
+  const [homeFocus, setHomeFocus] = useState<'input' | 'commands'>('input');
+  const [selectedCommand, setSelectedCommand] = useState(0);
+  const homeCommands = [
+    { icon: '▣', command: '/chat' },
+    { icon: '◇', command: '/init' },
+    { icon: '▸', command: '/run <file>' },
+    { icon: '☰', command: '/config' },
+    { icon: '?', command: '/help' },
+  ];
   const [expandedThinking, setExpandedThinking] = useState(false);
   const [stats, setStats] = useState<Stats>({ iterations: 0, toolCalls: 0, tokens: '0 in / 0 out' });
   const [elapsed, setElapsed] = useState(0);
@@ -281,6 +290,8 @@ function App({ options }: { options: CliOptions }) {
       setStats({ iterations: 0, toolCalls: 0, tokens: '0 in / 0 out' });
       setExpandedThinking(false);
       setShowHome(false);
+      setHomeFocus('input');
+      setSelectedCommand(0);
       setRunning(true);
       addItem({ kind: 'user', text: promptText });
 
@@ -331,8 +342,8 @@ function App({ options }: { options: CliOptions }) {
     [addItem, appendAssistant, handleEvent, model, mode, options, sandbox, saveSession, deepThink],
   );
 
-  const submit = useCallback(() => {
-    const value = input.trim();
+  const submit = useCallback((valueOverride?: string) => {
+    const value = (valueOverride ?? input).trim();
     if (!value) return;
     setHistory((prev) => (prev[prev.length - 1] === value ? prev : [...prev, value].slice(-100)));
     setHistoryIndex(null);
@@ -445,6 +456,8 @@ function App({ options }: { options: CliOptions }) {
         addItem({ kind: 'system', text: `主题已切换为 ${body}` });
       } else if (command === 'home') {
         setShowHome(true);
+        setHomeFocus('input');
+        setSelectedCommand(0);
         addItem({ kind: 'system', text: '已返回启动主页' });
       } else {
         addItem({ kind: 'system', text: `未知命令 ${command}` });
@@ -501,6 +514,37 @@ function App({ options }: { options: CliOptions }) {
           setInput((prev) => prev + keyInput);
         }
         return;
+      }
+    }
+
+    if (showHome) {
+      if (key.tab) {
+        setHomeFocus((current) => (current === 'input' ? 'commands' : 'input'));
+        return;
+      }
+      if (homeFocus === 'commands') {
+        if (key.leftArrow) {
+          setSelectedCommand((current) => (current - 1 + homeCommands.length) % homeCommands.length);
+          return;
+        }
+        if (key.rightArrow) {
+          setSelectedCommand((current) => (current + 1) % homeCommands.length);
+          return;
+        }
+        const digit = Number(keyInput);
+        if (Number.isInteger(digit) && digit >= 1 && digit <= homeCommands.length) {
+          setSelectedCommand(digit - 1);
+          submit(homeCommands[digit - 1].command);
+          return;
+        }
+        if (key.return) {
+          submit(homeCommands[selectedCommand].command);
+          return;
+        }
+        if (key.escape) {
+          setHomeFocus('input');
+          return;
+        }
       }
     }
 
@@ -580,6 +624,8 @@ function App({ options }: { options: CliOptions }) {
             version="0.1.0"
             running={running}
             input={input}
+            homeFocus={homeFocus}
+            selectedCommand={selectedCommand}
           />
         ) : (
           <HeaderBar project={projectLabel} running={running} />
