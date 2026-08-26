@@ -655,6 +655,9 @@ export function HomeCard({
               </Text>
             </Box>
           </Box>
+          <Text color={theme.muted}>
+            {'│\n│\n│\n│\n│'}
+          </Text>
           <Box flexDirection="column" marginLeft={2}>
             <Text color={theme.muted}>{displayProject}</Text>
             <Text color={theme.muted}>{branch}</Text>
