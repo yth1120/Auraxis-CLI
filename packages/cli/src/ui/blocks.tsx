@@ -609,9 +609,6 @@ export function HomeCard({
                 {' '}Agent CLI
               </Text>
             </Box>
-            <Text color={theme.muted}>
-              智能协作 · 代码理解 · 自动化执行
-            </Text>
             <Box flexDirection="row" marginTop={1}>
               <Text color={theme.success} bold>
                 ● 已连接到 Auraxis Agent
