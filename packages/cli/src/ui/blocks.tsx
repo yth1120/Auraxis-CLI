@@ -129,13 +129,18 @@ export function PromptBar({ input, running }: { input: string; running: boolean 
   const oneLine = raw.replace(/\r?\n/g, '⏎');
   const display = oneLine.length > maxInput ? `${oneLine.slice(0, maxInput - 1)}…` : oneLine;
   const caret = running ? '' : cursorOn ? '▌' : ' ';
+  const isPlaceholder = !input && !running;
   return (
     <Panel color={running ? theme.warning : theme.success} border="single">
       <Box flexDirection="row">
         <Text color={running ? theme.warning : theme.success} bold>
           {running ? '●' : '❯'}
         </Text>
-        <Text color={running ? theme.warning : theme.text} wrap="truncate">
+        <Text
+          color={running ? theme.warning : theme.text}
+          dimColor={isPlaceholder}
+          wrap="truncate"
+        >
           {' '}
           {display}
           {caret}
