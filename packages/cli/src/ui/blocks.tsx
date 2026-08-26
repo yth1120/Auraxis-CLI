@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { Box, Text, useStdout } from 'ink';
+import os from 'node:os';
 import type { PermissionRequest, Plan } from '@auraxis/core';
 
 type BorderStyle = 'round' | 'single' | 'double';
@@ -400,5 +401,142 @@ export function SystemBlock({ text }: { text: string }) {
   const theme = useTheme();
   return (
     <Text color={theme.info}>ℹ {text}</Text>
+  );
+}
+
+function formatSessionTime(seconds: number): string {
+  const hours = Math.floor(seconds / 3600).toString().padStart(2, '0');
+  const minutes = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
+  const secs = (seconds % 60).toString().padStart(2, '0');
+  return `${hours}:${minutes}:${secs}`;
+}
+
+function QuickStartCard({
+  command,
+  description,
+}: {
+  command: string;
+  description: string;
+}) {
+  const theme = useTheme();
+  return (
+    <Box width={14} borderStyle="round" borderColor={theme.muted} paddingX={1} flexDirection="column">
+      <Text color={theme.brand} bold wrap="truncate">
+        {command}
+      </Text>
+      <Text color={theme.text} dimColor wrap="truncate">
+        {description}
+      </Text>
+    </Box>
+  );
+}
+
+export function HomeCard({
+  project,
+  branch,
+  model,
+  mode,
+  sandbox,
+  version,
+  running,
+}: {
+  project: string;
+  branch: string;
+  model: string;
+  mode: string;
+  sandbox: string;
+  version: string;
+  running: boolean;
+}) {
+  const theme = useTheme();
+  const [sessionSeconds, setSessionSeconds] = useState(0);
+  const home = os.homedir();
+  const displayProject = project.startsWith(home) ? `~${project.slice(home.length)}` : project;
+  useEffect(() => {
+    const timer = setInterval(() => setSessionSeconds((current) => current + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const commands = [
+    { command: '/chat', description: '开始对话' },
+    { command: '/init', description: '初始化项目' },
+    { command: '/run <file>', description: '运行文件' },
+    { command: '/config', description: '配置设置' },
+    { command: '/help', description: '查看帮助' },
+  ];
+  return (
+    <Box flexDirection="column">
+      <Panel color={theme.brand} border="round">
+        <Box flexDirection="row">
+          <Box flexDirection="column" flexGrow={1}>
+            <Box flexDirection="row" alignItems="center">
+              <Text color={theme.brand} bold>
+                ▲
+              </Text>
+              <Text color={theme.info} dimColor>
+                {' '}
+                ✦ ✧
+              </Text>
+              <Text color={theme.brand} bold>
+                {' '}
+                Auraxis Agent CLI
+              </Text>
+            </Box>
+            <Text color={theme.text} dimColor>
+              智能协作 · 代码理解 · 自动化执行
+            </Text>
+            <Box flexDirection="row" marginTop={1}>
+              <Text color={theme.success} bold>
+                ● 已连接到 Auraxis Agent
+              </Text>
+              <Text color={theme.muted}>
+                {' '}
+                · 版本 {version}
+              </Text>
+            </Box>
+          </Box>
+          <Box flexDirection="column" marginLeft={2}>
+            <Text color={theme.muted}>
+              cwd: <Text color={theme.text}>{displayProject}</Text>
+            </Text>
+            <Text color={theme.muted}>
+              branch: <Text color={theme.text}>{branch}</Text>
+            </Text>
+            <Text color={theme.muted}>
+              model: <Text color={theme.text}>{model}</Text>
+            </Text>
+            <Text color={theme.muted}>
+              mode: <Text color={theme.text}>{mode}</Text>
+            </Text>
+            <Text color={theme.muted}>
+              sandbox: <Text color={theme.text}>{sandbox}</Text>
+            </Text>
+            <Text color={theme.muted}>
+              session: <Text color={theme.brand}>{formatSessionTime(sessionSeconds)}</Text>
+            </Text>
+            <Text color={theme.info} dimColor>
+              {running ? '● 运行中' : '● 就绪'}
+            </Text>
+          </Box>
+        </Box>
+      </Panel>
+      <Panel color={theme.muted} border="single" title="快速开始">
+        <Box flexDirection="row">
+          {commands.map((command) => (
+            <QuickStartCard key={command.command} {...command} />
+          ))}
+        </Box>
+      </Panel>
+      <Panel color={theme.info} border="single">
+        <Text color={theme.warning}>
+          💡 提示
+        </Text>
+        <Text color={theme.text} dimColor>
+          输入 natural language 或使用 / 命令触发智能能力 ·
+        </Text>
+        <Text color={theme.info}>
+          /help 查看全部命令
+        </Text>
+      </Panel>
+    </Box>
   );
 }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { execFile } from 'node:child_process';
 import { Box, Text, render, useApp, useInput, useStdin } from 'ink';
 import path from 'node:path';
 import {
@@ -35,6 +36,7 @@ import {
   SystemBlock,
   ThemeProvider,
   type ThemeName,
+  HomeCard,
 } from './blocks.js';
 
 interface UiItem {
@@ -78,6 +80,8 @@ function App({ options }: { options: CliOptions }) {
   const [sandbox, setSandbox] = useState<string>(options.sandbox || 'workspace-write');
   const [deepThink, setDeepThink] = useState(Boolean(options.deepThink));
   const [theme, setTheme] = useState<ThemeName>('dark');
+  const [showHome, setShowHome] = useState(true);
+  const [branch, setBranch] = useState('main');
   const [expandedThinking, setExpandedThinking] = useState(false);
   const [stats, setStats] = useState<Stats>({ iterations: 0, toolCalls: 0, tokens: '0 in / 0 out' });
   const [elapsed, setElapsed] = useState(0);
@@ -90,6 +94,13 @@ function App({ options }: { options: CliOptions }) {
   const mcpRef = useRef<McpManager | null>(null);
   const startedAtRef = useRef(0);
   const VISIBLE_ENTRIES = 12;
+
+  useEffect(() => {
+    const root = options.project ? path.resolve(options.project) : process.cwd();
+    execFile('git', ['branch', '--show-current'], { cwd: root }, (error, stdout) => {
+      setBranch(!error && stdout.trim() ? stdout.trim() : 'main');
+    });
+  }, [options.project]);
 
   useEffect(() => {
     setScrollOffset(0);
@@ -105,6 +116,7 @@ function App({ options }: { options: CliOptions }) {
   }, [running]);
 
   const projectLabel = path.basename(options.project || process.cwd()) || '当前项目';
+  const projectFull = options.project ? path.resolve(options.project) : process.cwd();
 
   const setActivePrompt = (next: PromptState) => {
     promptRef.current = next;
@@ -268,6 +280,7 @@ function App({ options }: { options: CliOptions }) {
       startedAtRef.current = Date.now();
       setStats({ iterations: 0, toolCalls: 0, tokens: '0 in / 0 out' });
       setExpandedThinking(false);
+      setShowHome(false);
       setRunning(true);
       addItem({ kind: 'user', text: promptText });
 
@@ -329,7 +342,7 @@ function App({ options }: { options: CliOptions }) {
       if (command === 'help') {
         addItem({
           kind: 'system',
-          text: '/help /clear /quit /status /model <id> /mode <ask|plan|auto> /sandbox <mode> /deep-think <on|off> /theme <dark|light|neon|mono> /api-key <key> /tools /skills /mcp /doctor /sessions /history\nPgUp/PgDn 浏览历史 · Ctrl+T 展开思考 · Ctrl+C 取消',
+          text: '/home /help /clear /quit /status /model <id> /mode <ask|plan|auto> /sandbox <mode> /deep-think <on|off> /theme <dark|light|neon|mono> /api-key <key> /chat /run <file> /init /config /tools /skills /mcp /doctor /sessions /history\nPgUp/PgDn 浏览历史 · Ctrl+T 展开思考 · Ctrl+C 取消',
         });
       } else if (command === 'clear') {
         setEntries([]);
@@ -404,6 +417,14 @@ function App({ options }: { options: CliOptions }) {
           await store.remove(body);
           addItem({ kind: 'system', text: `已删除会话 ${body}` });
         })();
+      } else if (command === 'chat') {
+        void runPrompt(body || '请开始对话');
+      } else if (command === 'run' && body) {
+        void runPrompt(`请运行文件 ${body}，并只给出结果摘要。`);
+      } else if (command === 'init') {
+        addItem({ kind: 'system', text: '初始化项目：已读取项目目录；可在 .auraxis 中配置指令、MCP 与技能。' });
+      } else if (command === 'config') {
+        addItem({ kind: 'system', text: `model=${model} mode=${mode} sandbox=${sandbox} theme=${theme}` });
       } else if (command === 'model' && body) {
         setModel(body);
       } else if (command === 'mode' && ['ask', 'plan', 'auto'].includes(body)) {
@@ -422,6 +443,9 @@ function App({ options }: { options: CliOptions }) {
       } else if (command === 'theme' && ['dark', 'light', 'neon', 'mono'].includes(body)) {
         setTheme(body as ThemeName);
         addItem({ kind: 'system', text: `主题已切换为 ${body}` });
+      } else if (command === 'home') {
+        setShowHome(true);
+        addItem({ kind: 'system', text: '已返回启动主页' });
       } else {
         addItem({ kind: 'system', text: `未知命令 ${command}` });
       }
@@ -546,7 +570,19 @@ function App({ options }: { options: CliOptions }) {
   return (
     <ThemeProvider theme={theme}>
       <Box flexDirection="column" paddingX={1}>
-        <HeaderBar project={projectLabel} running={running} />
+        {showHome ? (
+          <HomeCard
+            project={projectFull}
+            branch={branch}
+            model={model}
+            mode={mode}
+            sandbox={sandbox}
+            version="0.1.0"
+            running={running}
+          />
+        ) : (
+          <HeaderBar project={projectLabel} running={running} />
+        )}
         <Box flexDirection="column" marginTop={1} marginBottom={1}>
         {scrollOffset > 0 && visibleEntries.length < entries.length ? (
           <Text dimColor>↑ PgUp / PgDn 浏览历史 · 当前位于最早可见位置</Text>
