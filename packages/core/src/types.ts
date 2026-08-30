@@ -1,10 +1,13 @@
 import type { AgentEvent } from './events.js';
+import type { LspManager } from './lsp.js';
 
 export type ApprovalPolicy = 'ask' | 'plan' | 'auto';
-export type SandboxMode = 'read' | 'workspace-write' | 'full';
+export type SandboxMode = 'read' | 'workspace-write' | 'full' | 'container';
+export type ModelProvider = 'deepseek' | 'openai' | 'anthropic' | 'gemini' | 'ollama' | 'custom';
 export type ReasoningEffort = 'low' | 'high' | 'max';
 export type ToolChoice = 'auto' | 'none' | 'required' | string;
-export type AppMode = 'chat' | 'work' | 'code';
+export type ApiFamily = 'chat' | 'responses' | 'anthropic';
+export type ImageDetail = 'low' | 'high' | 'original' | 'auto';
 
 export type JsonObject = Record<string, unknown>;
 
@@ -12,7 +15,7 @@ export type LlmRole = 'system' | 'user' | 'assistant' | 'tool';
 
 export interface ImageContentPart {
   type: 'image_url';
-  image_url: { url: string };
+  image_url: { url: string; detail?: ImageDetail };
 }
 
 export interface TextContentPart {
@@ -20,7 +23,14 @@ export interface TextContentPart {
   text: string;
 }
 
-export type ChatContentPart = TextContentPart | ImageContentPart;
+export interface FileContentPart {
+  type: 'file';
+  file_id?: string;
+  file_data?: string;
+  filename?: string;
+}
+
+export type ChatContentPart = TextContentPart | ImageContentPart | FileContentPart;
 
 export interface LlmToolCall {
   id: string;
@@ -56,6 +66,7 @@ export interface LlmToolSpec {
   name: string;
   description: string;
   parameters: JsonObject;
+  strict?: boolean;
 }
 
 export interface LlmRequest {
@@ -63,7 +74,6 @@ export interface LlmRequest {
   tools?: LlmToolSpec[];
   toolChoice?: ToolChoice;
   stream?: boolean;
-  isDeepThink?: boolean;
   reasoningEffort?: ReasoningEffort;
   maxTokens?: number;
   temperature?: number;
@@ -94,6 +104,33 @@ export interface LlmClient {
   chat(request: LlmRequest): Promise<LlmResult>;
 }
 
+export interface UploadedFile {
+  id: string;
+  object?: string;
+  bytes: number;
+  created_at?: number;
+  filename?: string;
+  purpose?: string;
+  expires_at?: number;
+}
+
+export interface FileListResult {
+  data: UploadedFile[];
+  first_id?: string;
+  last_id?: string;
+  has_more?: boolean;
+}
+
+export interface FilesClient {
+  upload(
+    file: { name: string; buffer: Buffer; mimeType: string },
+    options?: { purpose?: string; expiresAfterSeconds?: number },
+  ): Promise<UploadedFile>;
+  list(options?: { after?: string; limit?: number; order?: 'asc' | 'desc'; purpose?: string }): Promise<FileListResult>;
+  retrieve(id: string): Promise<UploadedFile>;
+  delete(id: string): Promise<{ id: string; deleted: boolean }>;
+}
+
 export type ToolDanger = 'read' | 'write' | 'exec' | 'network' | 'internal' | 'mcp' | 'agent';
 
 export interface ToolDefinition {
@@ -103,13 +140,18 @@ export interface ToolDefinition {
   parameters: JsonObject;
   required?: string[];
   mcpServer?: string;
+  /** 可并发安全（只读、无共享状态）的工具允许 Code Mode 并行子调用。 */
+  isConcurrencySafe?: boolean;
 }
 
 export interface McpServerConfig {
   name: string;
-  command: string;
+  transport?: 'stdio' | 'http';
+  url?: string;
+  command?: string;
   args?: string[];
   env?: Record<string, string>;
+  headers?: Record<string, string>;
 }
 
 export interface McpHost {
@@ -152,23 +194,32 @@ export interface RunOptions {
   model: string;
   apiKey: string;
   apiBase: string;
+  headers?: Record<string, string>;
+  supportsImages?: boolean;
+  provider?: ModelProvider;
+  apiFamily?: ApiFamily;
   mode: ApprovalPolicy;
   sandboxMode: SandboxMode;
+  maxTokens?: number;
   maxIterations?: number;
-  deepThink?: boolean;
+  contextBudget?: number;
   reasoningEffort?: ReasoningEffort;
   toolChoice?: ToolChoice;
+  visionDetail?: ImageDetail;
+  strictTools?: boolean;
   tools: ToolDefinition[];
   mcp?: McpHost;
+  files?: FilesClient;
   subAgentDepth?: number;
-  appMode?: AppMode;
   llm?: LlmClient;
+  lsp?: LspManager;
   sessionId: string;
   resumeMessages?: ChatMessage[];
   signal?: AbortSignal;
   onEvent?: (event: AgentEvent) => void;
   requestPermission?: (request: PermissionRequest) => Promise<PermissionDecision>;
   onPlanApproval?: (plan: Plan) => Promise<PlanDecision>;
+  onPlanEdit?: (plan: Plan) => Promise<Plan | null>;
   askUser?: (question: string) => Promise<string>;
 }
 
@@ -185,6 +236,7 @@ export interface SessionRecord {
   id: string;
   projectRoot: string;
   model: string;
+  provider?: ModelProvider;
   createdAt: number;
   updatedAt: number;
   messages: ChatMessage[];

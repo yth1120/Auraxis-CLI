@@ -5,6 +5,7 @@ import type { JsonObject } from '../types.js';
 import type { ToolContext, ToolOutput } from './registry.js';
 
 const MAX_FILE_BYTES = 512 * 1024;
+const MAX_INLINE_IMAGE_BYTES = 10 * 1024 * 1024;
 const IGNORED_DIRS = ['node_modules', '.git', 'dist', 'build', 'coverage', '.auraxis'];
 
 export function resolveInside(root: string, raw: unknown): string {
@@ -48,9 +49,11 @@ export async function readFileTool(input: JsonObject, ctx: ToolContext): Promise
 }
 
 export async function readImageFileTool(input: JsonObject, ctx: ToolContext): Promise<ToolOutput> {
+  if (ctx.supportsImages === false) {
+    throw new Error('当前模型不支持图片输入，请切换到支持视觉的模型');
+  }
   const file = resolveInside(ctx.projectRoot, input.file_path);
   const stat = await fsp.stat(file);
-  if (stat.size > 10 * 1024 * 1024) throw new Error('图片超过 10MB，无法发送给模型');
   const extension = path.extname(file).toLowerCase();
   const mimeByExtension: Record<string, string> = {
     '.jpg': 'image/jpeg',
@@ -62,8 +65,29 @@ export async function readImageFileTool(input: JsonObject, ctx: ToolContext): Pr
   const mime = mimeByExtension[extension];
   if (!mime) throw new Error('仅支持 JPEG / PNG / GIF / WebP');
   const buffer = await fsp.readFile(file);
-  const dataUrl = `data:${mime};base64,${buffer.toString('base64')}`;
   const prompt = typeof input.prompt === 'string' && input.prompt ? input.prompt : '请分析这张图片。';
+  const useFileId = input.use_file === true || stat.size > MAX_INLINE_IMAGE_BYTES;
+  if (useFileId) {
+    if (!ctx.files) {
+      throw new Error(`图片超过 ${Math.round(MAX_INLINE_IMAGE_BYTES / 1024 / 1024)}MB，请配置 DeepSeek API Key 以使用 Files API`);
+    }
+    const uploaded = await ctx.files.upload({
+      name: path.basename(file),
+      buffer,
+      mimeType: mime,
+    });
+    return {
+      content: `图片已上传: ${path.relative(ctx.projectRoot, file)} · ${uploaded.id}`,
+      artifact: {
+        file_path: file,
+        fileId: uploaded.id,
+        filename: path.basename(file),
+        mimeType: mime,
+        prompt,
+      },
+    };
+  }
+  const dataUrl = `data:${mime};base64,${buffer.toString('base64')}`;
   return {
     content: `图片已读取: ${path.relative(ctx.projectRoot, file)} (${Math.round(stat.size / 1024)} KB)`,
     artifact: {
@@ -76,14 +100,20 @@ export async function readImageFileTool(input: JsonObject, ctx: ToolContext): Pr
 }
 
 export async function writeFileTool(input: JsonObject, ctx: ToolContext): Promise<ToolOutput> {
+  ctx.sandbox?.assertPath(input.file_path);
   const file = resolveInside(ctx.projectRoot, input.file_path);
   const content = typeof input.content === 'string' ? input.content : '';
+  const previous = await fsp.readFile(file, 'utf8').catch(() => null);
+  if (previous !== null && previous !== content && ctx.undo) {
+    await ctx.undo.push(ctx.sessionId || '', file, previous);
+  }
   await fsp.mkdir(path.dirname(file), { recursive: true });
   await fsp.writeFile(file, content, 'utf8');
   return { content: `OK 已写入 ${path.relative(ctx.projectRoot, file)}` };
 }
 
 export async function editFileTool(input: JsonObject, ctx: ToolContext): Promise<ToolOutput> {
+  ctx.sandbox?.assertPath(input.file_path);
   const file = resolveInside(ctx.projectRoot, input.file_path);
   const oldString = typeof input.old_string === 'string' ? input.old_string : '';
   const newString = typeof input.new_string === 'string' ? input.new_string : '';
@@ -94,8 +124,24 @@ export async function editFileTool(input: JsonObject, ctx: ToolContext): Promise
   if (count === 0) throw new Error('old_string 未找到');
   if (count > 1 && !replaceAll) throw new Error(`匹配到 ${count} 处，请设置 replace_all=true`);
   const next = replaceAll ? current.split(oldString).join(newString) : current.replace(oldString, newString);
+  if (next !== current && ctx.undo) await ctx.undo.push(ctx.sessionId || '', file, current);
   await fsp.writeFile(file, next, 'utf8');
   return { content: `OK 已替换 ${count} 处: ${path.relative(ctx.projectRoot, file)}` };
+}
+
+export async function deleteFileTool(input: JsonObject, ctx: ToolContext): Promise<ToolOutput> {
+  ctx.sandbox?.assertPath(input.file_path);
+  const file = resolveInside(ctx.projectRoot, input.file_path);
+  const stat = await fsp.stat(file).catch(() => null);
+  if (!stat) throw new Error('文件不存在');
+  const recursive = input.recursive === true;
+  if (stat.isDirectory() && !recursive) throw new Error('目录删除需要 recursive=true');
+  if (stat.isFile()) {
+    const previous = await fsp.readFile(file, 'utf8').catch(() => '');
+    if (ctx.undo) await ctx.undo.push(ctx.sessionId || '', file, previous);
+  }
+  await fsp.rm(file, { recursive: stat.isDirectory(), force: false });
+  return { content: `OK 已删除 ${path.relative(ctx.projectRoot, file)}` };
 }
 
 export async function runFileTools(input: JsonObject, ctx: ToolContext): Promise<ToolOutput> {

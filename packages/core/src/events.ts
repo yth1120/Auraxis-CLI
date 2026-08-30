@@ -16,10 +16,6 @@ export type AgentEvent =
   | { type: 'permission_request'; request: PermissionRequest }
   | { type: 'done'; result?: string };
 
-export function makeRequestId(prefix = 'req'): string {
-  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
-}
-
 export function truncateText(text: string, max = 120): string {
   const oneLine = text.replace(/\s+/g, ' ').trim();
   if (oneLine.length <= max) return oneLine;

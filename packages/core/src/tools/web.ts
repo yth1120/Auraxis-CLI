@@ -25,9 +25,10 @@ function decodeDuckUrl(raw: string): string {
   }
 }
 
-export async function webFetchTool(input: JsonObject, _ctx: ToolContext): Promise<ToolOutput> {
+export async function webFetchTool(input: JsonObject, ctx: ToolContext): Promise<ToolOutput> {
   const raw = typeof input.url === 'string' ? input.url : '';
   if (!raw) throw new Error('url 不能为空');
+  ctx.sandbox?.assertNetwork(raw);
   const url = new URL(raw);
   if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new Error('仅支持 http/https');
   const controller = new AbortController();
@@ -43,11 +44,12 @@ export async function webFetchTool(input: JsonObject, _ctx: ToolContext): Promis
   }
 }
 
-export async function webSearchTool(input: JsonObject, _ctx: ToolContext): Promise<ToolOutput> {
+export async function webSearchTool(input: JsonObject, ctx: ToolContext): Promise<ToolOutput> {
   const query = typeof input.query === 'string' ? input.query : '';
   if (!query) throw new Error('query 不能为空');
   const maxResults = typeof input.max_results === 'number' ? Math.min(10, Math.max(1, input.max_results)) : 5;
   const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+  ctx.sandbox?.assertNetwork(url);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 20_000);
   try {
@@ -79,4 +81,3 @@ export async function webSearchTool(input: JsonObject, _ctx: ToolContext): Promi
     clearTimeout(timer);
   }
 }
-

@@ -1,6 +1,7 @@
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { scanPlugins } from './plugins.js';
 
 export interface SkillRecord {
   id: string;
@@ -52,10 +53,12 @@ async function scanDir(dir: string): Promise<SkillRecord[]> {
 }
 
 export async function scanSkills(projectRoot: string): Promise<SkillRecord[]> {
+  const plugins = await scanPlugins(projectRoot, process.env.AURAXIS_TRUST_PROJECT_HOOKS === '1');
   const roots = [
     path.join(projectRoot, '.auraxis', 'skills'),
     path.join(projectRoot, 'skills'),
     path.join(os.homedir(), '.auraxis', 'skills'),
+    ...plugins.map((plugin) => path.join(plugin.root, 'skills')),
   ];
   const all: SkillRecord[] = [];
   for (const root of roots) {
@@ -69,4 +72,3 @@ export async function scanSkills(projectRoot: string): Promise<SkillRecord[]> {
 export async function readSkillContent(skill: SkillRecord): Promise<string> {
   return fsp.readFile(skill.file, 'utf8');
 }
-

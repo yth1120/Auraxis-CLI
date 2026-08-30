@@ -1,6 +1,7 @@
 node_modules/
 dist/
 coverage/
+.coverage-tmp*/
 .DS_Store
 *.log
 *.tsbuildinfo
@@ -8,3 +9,7 @@ coverage/
 .env.*
 !.env.example
 auraxis-data/
+packages/cli/native/
+.auraxis/audit/
+.auraxis/artifacts/
+.auraxis/memory.json

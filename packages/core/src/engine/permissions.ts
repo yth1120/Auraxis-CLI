@@ -59,22 +59,3 @@ export class PermissionGate {
     return isToolReadOnly(toolName);
   }
 }
-
-export function permissionDescription(danger: ToolDanger): string {
-  switch (danger) {
-    case 'read':
-      return '只读';
-    case 'write':
-      return '修改文件';
-    case 'exec':
-      return '执行命令';
-    case 'network':
-      return '访问网络';
-    case 'internal':
-      return '内部状态';
-    case 'agent':
-      return '启动子 Agent';
-    default:
-      return '危险操作';
-  }
-}

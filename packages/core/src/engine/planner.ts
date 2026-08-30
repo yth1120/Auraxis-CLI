@@ -1,5 +1,5 @@
-import path from 'node:path';
 import type { LlmClient, Plan } from '../types.js';
+import { asJsonObject, parseJson } from '../validation.js';
 
 export function buildPlannerPrompt(prompt: string, projectRoot: string): string {
   return [
@@ -20,18 +20,20 @@ function parsePlan(text: string): Plan | null {
   const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(text);
   const raw = fenced ? fenced[1] : text;
   try {
-    const value = JSON.parse(raw) as Record<string, unknown>;
+    const value = asJsonObject(parseJson(raw));
     const tasks = Array.isArray(value.tasks)
       ? value.tasks
-          .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object' && !Array.isArray(item))
-          .map((item, index) => ({
-            id: typeof item.id === 'string' && item.id ? item.id : String(index + 1),
-            description: typeof item.description === 'string' ? item.description : String(item.description || ''),
+          .map((item, index) => {
+            const task = asJsonObject(item);
+            return {
+            id: typeof task.id === 'string' && task.id ? task.id : String(index + 1),
+            description: typeof task.description === 'string' ? task.description : String(task.description || ''),
             status: 'pending' as const,
-            dependencies: Array.isArray(item.dependencies)
-              ? item.dependencies.filter((dep): dep is string => typeof dep === 'string')
+            dependencies: Array.isArray(task.dependencies)
+              ? task.dependencies.filter((dep): dep is string => typeof dep === 'string')
               : [],
-          }))
+            };
+          })
       : [];
     if (tasks.length === 0) return null;
     return {
@@ -69,4 +71,3 @@ export async function generatePlan(
     approvedSteps: ['1'],
   };
 }
-

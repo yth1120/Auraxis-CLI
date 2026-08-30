@@ -1,14 +1,11 @@
 import crypto from 'node:crypto';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import type { SessionRecord } from '../types.js';
+import type { ModelProvider, SessionRecord } from '../types.js';
+import { parseJson, sessionRecordSchema } from '../validation.js';
 
 export interface SessionStoreOptions {
   dir: string;
-}
-
-function projectSlug(root: string): string {
-  return path.basename(root).replace(/[^\w.-]+/g, '_') || 'root';
 }
 
 export class SessionStore {
@@ -26,12 +23,13 @@ export class SessionStore {
     await fsp.mkdir(this.dir, { recursive: true });
   }
 
-  async create(projectRoot: string, model: string): Promise<SessionRecord> {
+  async create(projectRoot: string, model: string, provider?: ModelProvider): Promise<SessionRecord> {
     await this.ensure();
     const record: SessionRecord = {
       id: `s_${Date.now().toString(36)}_${crypto.randomBytes(4).toString('hex')}`,
       projectRoot: path.resolve(projectRoot),
       model,
+      provider,
       createdAt: Date.now(),
       updatedAt: Date.now(),
       messages: [],
@@ -49,9 +47,8 @@ export class SessionStore {
   async load(id: string): Promise<SessionRecord | null> {
     try {
       const raw = await fsp.readFile(this.fileFor(id), 'utf8');
-      const value = JSON.parse(raw) as SessionRecord;
-      if (!value || typeof value.id !== 'string' || !Array.isArray(value.messages)) return null;
-      return value;
+      const parsed = sessionRecordSchema.safeParse(parseJson(raw));
+      return parsed.success ? parsed.data : null;
     } catch {
       return null;
     }
@@ -82,4 +79,3 @@ export class SessionStore {
     }
   }
 }
-

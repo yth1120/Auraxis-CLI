@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { credentialFileSchema, parseJson } from './validation.js';
 
 interface EncryptedEntry {
   iv: string;
@@ -35,10 +36,8 @@ export class SecretStore {
   private async readFile(): Promise<CredentialFile> {
     try {
       const raw = await fs.readFile(this.credentialsFile, 'utf8');
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') {
-        return parsed as CredentialFile;
-      }
+      const parsed = credentialFileSchema.safeParse(parseJson(raw));
+      if (parsed.success) return parsed.data as CredentialFile;
     } catch {
       /* missing file */
     }
@@ -88,4 +87,3 @@ export class SecretStore {
     await this.writeFile(file);
   }
 }
-

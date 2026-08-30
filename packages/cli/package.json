@@ -1,7 +1,8 @@
 {
   "name": "@auraxis/cli",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Auraxis agent terminal workbench",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "auraxis": "./bin/auraxis.js"
@@ -14,21 +15,28 @@
   "engines": {
     "node": ">=22.12.0"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "build": "node esbuild.mjs",
+    "build:single": "node esbuild.mjs --single",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "coverage:gate": "vitest run --coverage"
   },
   "dependencies": {
-    "@auraxis/core": "*",
     "ink": "^7.1.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@auraxis/core": "1.0.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5"
-  }
+  },
+  "prepublishOnly": "npm run build && npm run build:single"
 }

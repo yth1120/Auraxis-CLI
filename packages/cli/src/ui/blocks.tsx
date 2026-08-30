@@ -1,28 +1,100 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { Box, Text, useStdout } from 'ink';
 import os from 'node:os';
-import type { PermissionRequest, Plan } from '@auraxis/core';
+import type { ModelChoice, PermissionRequest, Plan, SkillRecord } from '@auraxis/core';
+import { COMMAND_HINTS, commandHintLabel, type CommandHint } from './commands.js';
+import { HOME_COMMANDS, buildBlockTitle, shortenProjectPath } from './home.js';
+import { isDiffCodeBlock, parseInlineMarkdown, splitCodeBlocks } from './markdown.js';
+import { truncateByWidth } from './text.js';
+import type { ActiveCommand, ActivityItem, ChoiceOption, ChoicePickerState } from './terminal-model.js';
 
 type BorderStyle = 'round' | 'single' | 'double';
+type ToolStatus = 'idle' | 'running' | 'done' | 'error' | 'aborted';
 
 export type ThemeName = 'dark' | 'light' | 'neon' | 'mono';
 
 interface Palette {
   brand: string;
+  brandFrom: string;
+  brandTo: string;
   text: string;
   muted: string;
+  border: string;
   success: string;
   warning: string;
   danger: string;
   info: string;
   plan: string;
+  surface: string;
+  surfaceAlt: string;
+  highlight: string;
 }
 
 const THEMES: Record<ThemeName, Palette> = {
-  dark: { brand: 'cyan', text: 'white', muted: 'gray', success: 'green', warning: 'yellow', danger: 'red', info: 'blue', plan: 'blue' },
-  light: { brand: 'blue', text: 'black', muted: 'gray', success: 'green', warning: 'yellow', danger: 'red', info: 'blue', plan: 'blue' },
-  neon: { brand: 'magenta', text: 'white', muted: 'gray', success: 'green', warning: 'yellow', danger: 'red', info: 'cyan', plan: 'cyan' },
-  mono: { brand: 'white', text: 'white', muted: 'gray', success: 'white', warning: 'white', danger: 'white', info: 'white', plan: 'white' },
+  dark: {
+    brand: '#A6A4C2',
+    brandFrom: '#8C8AA8',
+    brandTo: '#D9D7E8',
+    text: '#F1F1EE',
+    muted: '#9DA2A9',
+    border: '#3A3E45',
+    success: '#4FAE86',
+    warning: '#B8935A',
+    danger: '#B07177',
+    info: '#8C8AA8',
+    plan: '#8C8AA8',
+    surface: '#23262C',
+    surfaceAlt: '#2A2E35',
+    highlight: '#D9D7E8',
+  },
+  light: {
+    brand: '#6A6884',
+    brandFrom: '#292C32',
+    brandTo: '#6A6884',
+    text: '#111216',
+    muted: '#61676F',
+    border: '#D5D8DE',
+    success: '#4F7C68',
+    warning: '#B97F3E',
+    danger: '#A25B60',
+    info: '#6A6884',
+    plan: '#6A6884',
+    surface: '#FFFFFF',
+    surfaceAlt: '#EDEFF3',
+    highlight: '#6A6884',
+  },
+  neon: {
+    brand: '#D8C7F0',
+    brandFrom: '#8C8AA8',
+    brandTo: '#D9D7E8',
+    text: '#F1F1EE',
+    muted: '#9DA2A9',
+    border: '#57506B',
+    success: '#8FE3C1',
+    warning: '#F3C57B',
+    danger: '#E9A2A7',
+    info: '#A6A4C2',
+    plan: '#A6A4C2',
+    surface: '#1E1726',
+    surfaceAlt: '#2A2033',
+    highlight: '#D9D7E8',
+  },
+  mono: {
+    brand: '#F1F1EE',
+    brandFrom: '#F1F1EE',
+    brandTo: '#F1F1EE',
+    text: '#F1F1EE',
+    muted: '#9DA2A9',
+    border: '#4A4D52',
+    success: '#F1F1EE',
+    warning: '#F1F1EE',
+    danger: '#F1F1EE',
+    info: '#F1F1EE',
+    plan: '#F1F1EE',
+    surface: '#111111',
+    surfaceAlt: '#1D1D1D',
+    highlight: '#F1F1EE',
+  },
 };
 
 const ThemeContext = createContext<Palette>(THEMES.dark);
@@ -35,18 +107,20 @@ export function ThemeProvider({ theme, children }: { theme: ThemeName; children:
   return <ThemeContext.Provider value={getTheme(theme)}>{children}</ThemeContext.Provider>;
 }
 
-function useTheme(): Palette {
+export function useTheme(): Palette {
   return useContext(ThemeContext);
 }
 
 export function Panel({
   title,
-  color = 'cyan',
+  color,
   border = 'round',
   children,
   width,
   marginLeft,
+  marginTop,
   flexGrow,
+  paddingY = 0,
 }: {
   title?: string;
   color?: string;
@@ -54,21 +128,25 @@ export function Panel({
   children?: ReactNode;
   width?: number;
   marginLeft?: number;
+  marginTop?: number;
   flexGrow?: number;
+  paddingY?: number;
 }) {
+  const theme = useTheme();
   return (
     <Box
       borderStyle={border}
-      borderColor={color}
+      borderColor={color || theme.brand}
       paddingX={1}
-      paddingY={0}
+      paddingY={paddingY}
       flexDirection="column"
       width={width}
       marginLeft={marginLeft}
+      marginTop={marginTop}
       flexGrow={flexGrow}
     >
       {title ? (
-        <Text color={color} bold>
+        <Text color={color || theme.brand} bold>
           {title}
         </Text>
       ) : null}
@@ -80,42 +158,66 @@ export function Panel({
 export function HeaderBar({ project, running }: { project: string; running: boolean }) {
   const theme = useTheme();
   return (
-    <Panel title="Auraxis Agent" color={theme.brand}>
-      <Text dimColor>{running ? '● 运行中' : '● 就绪'} · {project}</Text>
-    </Panel>
+    <Box flexDirection="row">
+      <Text color={theme.brand} bold>
+        ▲ Auraxis
+      </Text>
+      <Text color={theme.muted} dimColor wrap="truncate">
+        {' '}· {project}
+      </Text>
+      {running ? (
+        <Text color={theme.warning} bold>
+          {' '}● 运行中
+        </Text>
+      ) : null}
+    </Box>
+  );
+}
+
+export function PathBar({ project }: { project: string }) {
+  const theme = useTheme();
+  const pathLabel = shortenProjectPath(project, os.homedir(), 34);
+  return (
+    <Box marginTop={1} marginBottom={0}>
+      <Text wrap="truncate">
+        <Text color={theme.muted}>路径 </Text>
+        <Text color={theme.text}>{pathLabel}</Text>
+      </Text>
+    </Box>
   );
 }
 
 export function StatusBar({
   model,
-  mode,
-  sandbox,
-  deepThink,
+  permission,
+  reasoningEffort,
   running,
-  iterations,
-  toolCalls,
-  tokens,
-  themeName,
+  currentTool,
 }: {
   model: string;
-  mode: string;
-  sandbox: string;
-  deepThink: boolean;
+  permission: string;
+  reasoningEffort: string;
   running: boolean;
-  iterations: number;
-  toolCalls: number;
-  tokens: string;
-  themeName: string;
+  currentTool?: string;
 }) {
   const theme = useTheme();
+  const permissionColor =
+    permission === 'auto' ? theme.success : permission === 'plan' ? theme.plan : permission === 'ask' ? theme.warning : theme.info;
   return (
-    <Box flexDirection="row" justifyContent="space-between" marginTop={1}>
-      <Text color={theme.muted}>
-        {model} · {mode} · {sandbox} · deepThink {deepThink ? 'on' : 'off'} · {themeName}
+    <Box flexDirection="column" marginTop={0}>
+      <Text wrap="truncate">
+        <Text color={theme.muted}>模型 </Text>
+        <Text color={theme.text}>{model}</Text>
+        <Text color={theme.muted}> · 模式 </Text>
+        <Text color={permissionColor}>{permission}</Text>
+        <Text color={theme.muted}> · 思考 </Text>
+        <Text color={theme.text}>{reasoningEffort}</Text>
       </Text>
-      <Text color={theme.muted}>
-        {running ? <Spinner /> : null} iter {iterations} / tools {toolCalls} / {tokens}
-      </Text>
+      {running ? (
+        <Text color={theme.warning} wrap="truncate">
+          ● {currentTool || '思考中'} <Spinner />
+        </Text>
+      ) : null}
     </Box>
   );
 }
@@ -123,64 +225,381 @@ export function StatusBar({
 function Spinner() {
   const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
   const [index, setIndex] = useState(0);
+  const theme = useTheme();
   useEffect(() => {
     const timer = setInterval(() => setIndex((current) => (current + 1) % frames.length), 80);
     return () => clearInterval(timer);
   }, []);
-  return <Text color="yellow">{frames[index]}</Text>;
+  return <Text color={theme.warning}>{frames[index]}</Text>;
+}
+
+function formatDuration(duration?: number): string {
+  if (duration === undefined) return '';
+  if (duration < 1000) return `${duration}ms`;
+  if (duration < 60_000) {
+    const seconds = duration / 1000;
+    return `${seconds >= 10 ? seconds.toFixed(0) : seconds.toFixed(1)}s`;
+  }
+  const minutes = Math.floor(duration / 60_000);
+  const seconds = Math.floor((duration % 60_000) / 1000);
+  return `${minutes}m${seconds}s`;
+}
+
+function resolveToolStatus(
+  theme: Palette,
+  status?: ToolStatus,
+  ok?: boolean,
+): { kind: ToolStatus; color: string; marker: string } {
+  const kind: ToolStatus =
+    status === 'error' || ok === false
+      ? 'error'
+      : status === 'done' || ok === true
+        ? 'done'
+        : status || 'idle';
+  const color =
+    kind === 'error'
+      ? theme.danger
+      : kind === 'done'
+        ? theme.success
+        : kind === 'aborted'
+          ? theme.muted
+          : kind === 'running'
+            ? theme.warning
+            : theme.info;
+  const marker =
+    kind === 'error' ? '✗' : kind === 'done' ? '✓' : kind === 'aborted' ? '⏹' : kind === 'running' ? '●' : '▸';
+  return { kind, color, marker };
+}
+
+function ToolStatusRow({
+  name,
+  summary,
+  status,
+  ok,
+  error,
+  duration,
+  output,
+  showOutput = false,
+  outputLimit = 3,
+  compact = false,
+}: {
+  name: string;
+  summary?: string;
+  status?: ToolStatus;
+  ok?: boolean;
+  error?: string;
+  duration?: number;
+  output?: string;
+  showOutput?: boolean;
+  outputLimit?: number;
+  compact?: boolean;
+}) {
+  const theme = useTheme();
+  const resolved = resolveToolStatus(theme, status, ok);
+  const trimmedSummary = summary?.trim();
+  const detail = error || (trimmedSummary && trimmedSummary !== name ? trimmedSummary : '');
+  const outputLines = output ? output.split(/\r?\n/) : [];
+  const safeLimit = Math.max(1, Math.floor(outputLimit));
+  const visibleOutput = showOutput ? outputLines.slice(0, safeLimit) : [];
+  return (
+    <Box flexDirection="column" marginTop={compact ? 0 : 1}>
+      <Box flexDirection="row" flexShrink={0}>
+        <Text color={resolved.color} bold wrap="truncate">
+          {resolved.marker} {toolIcon(name)} {name}
+        </Text>
+        <Box flexGrow={1} flexShrink={1}>
+          {detail ? (
+            <Text
+              color={resolved.kind === 'error' ? theme.danger : theme.muted}
+              dimColor={resolved.kind !== 'error'}
+              wrap="truncate"
+            >
+              {' '}
+              {detail}
+            </Text>
+          ) : null}
+        </Box>
+        <Text color={theme.muted}>{formatDuration(duration)}</Text>
+      </Box>
+      {visibleOutput.length > 0 ? (
+        <Box marginLeft={2}>
+          <Text
+            color={resolved.kind === 'error' ? theme.danger : theme.muted}
+            dimColor={resolved.kind !== 'error'}
+            wrap="wrap"
+          >
+            {visibleOutput.map((line) => truncateByWidth(line, 120)).join('\n')}
+            {outputLines.length > safeLimit ? `\n… 仅显示前 ${safeLimit} 行` : ''}
+          </Text>
+        </Box>
+      ) : null}
+    </Box>
+  );
+}
+
+function ActivityRow({
+  item,
+  showOutput,
+  outputLimit = 3,
+}: {
+  item: ActivityItem;
+  showOutput: boolean;
+  outputLimit?: number;
+}) {
+  return (
+    <ToolStatusRow
+      name={item.name}
+      summary={item.summary}
+      status={item.status}
+      error={item.error}
+      duration={item.duration}
+      output={item.output}
+      showOutput={showOutput}
+      outputLimit={outputLimit}
+    />
+  );
+}
+
+export function ExecutionPanel({
+  items,
+  running,
+  expanded = false,
+}: {
+  items: ActivityItem[];
+  running: boolean;
+  expanded?: boolean;
+}) {
+  const theme = useTheme();
+  if (!items.length) return null;
+  const activeCount = items.filter((item) => item.status === 'running').length;
+  const errorCount = items.filter((item) => item.status === 'error').length;
+  const visibleItems = expanded ? items : items.slice(-8);
+  const hiddenCount = items.length - visibleItems.length;
+  const headingColor = running ? theme.warning : errorCount ? theme.danger : theme.success;
+  const heading = running ? '执行中' : '执行';
+  const headingMarker = running ? '●' : errorCount ? '✗' : '✓';
+  return (
+    <Box
+      flexDirection="column"
+      paddingX={1}
+      marginTop={1}
+      backgroundColor={theme.surfaceAlt}
+    >
+      <Box flexDirection="row" flexShrink={0}>
+        <Text color={headingColor} bold wrap="truncate">
+          {headingMarker} {heading}
+        </Text>
+        {activeCount > 0 ? <Text color={theme.warning}> · {activeCount} 运行中</Text> : null}
+        {errorCount > 0 ? <Text color={theme.danger}> · {errorCount} 失败</Text> : null}
+        <Text color={theme.muted} wrap="truncate">
+          {' '}
+          · {items.length} 步
+        </Text>
+      </Box>
+      <Box flexDirection="column">
+        {visibleItems.map((item, index) => (
+          <ActivityRow
+            key={item.id || `${item.kind}-${item.name}-${index}`}
+            item={item}
+            showOutput={expanded || item.status === 'error'}
+            outputLimit={expanded ? 12 : 3}
+          />
+        ))}
+        {hiddenCount > 0 ? (
+          <Text color={theme.muted} dimColor>
+            … 更早 {hiddenCount} 步 · Ctrl+O 展开
+          </Text>
+        ) : null}
+      </Box>
+    </Box>
+  );
+}
+
+export function CommandHintsBar({
+  suggestions,
+  selected,
+  width,
+}: {
+  suggestions: CommandHint[];
+  selected: number;
+  width?: number;
+}) {
+  const theme = useTheme();
+  if (!suggestions.length) return null;
+  return (
+    <Box
+      flexDirection="column"
+      paddingX={1}
+      marginTop={1}
+      backgroundColor={theme.surfaceAlt}
+      width={width}
+    >
+      {suggestions.map((hint, index) => (
+        <Box key={hint.command} flexDirection="row" flexShrink={0}>
+          <Text color={index === selected ? theme.text : theme.muted} bold={index === selected}>
+            {index === selected ? '▸' : ' '}
+          </Text>
+          <Text
+            color={index === selected ? theme.text : theme.muted}
+            bold={index === selected}
+            wrap="truncate"
+          >
+            {' '}
+            {hint.command}
+          </Text>
+          <Box flexGrow={1} flexShrink={1}>
+            <Text color={theme.muted} dimColor wrap="truncate">
+              {' '}
+              {hint.description}
+            </Text>
+          </Box>
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
+export function HelpPanel() {
+  const theme = useTheme();
+  const { stdout } = useStdout();
+  const maxPerGroup = (stdout.rows || 24) < 32 ? 2 : 3;
+  const groups = [...new Set(COMMAND_HINTS.map((hint) => hint.group))].map((group) => ({
+    group,
+    hints: COMMAND_HINTS.filter((hint) => hint.group === group),
+  }));
+  return (
+    <Panel color={theme.brand} border="double" title="Auraxis · 帮助">
+      <Text color={theme.muted}>快捷键：Ctrl+P 帮助 · Ctrl+J 换行 · Ctrl+T 思考 · Ctrl+O 执行详情 · Ctrl+Z 撤回排队 · Ctrl+C 取消/退出</Text>
+      <Text color={theme.muted}>Ctrl+L 清空对话 · PgUp/PgDn/滚轮 浏览历史 · 输入 / 查看命令联想</Text>
+      <Box flexDirection="column" marginTop={1}>
+        {groups.map(({ group, hints }) => (
+          <Box key={group} flexDirection="column" marginTop={1}>
+            <Text color={theme.info} bold>
+              {group}
+            </Text>
+            {hints.slice(0, maxPerGroup).map((hint) => (
+              <Text key={hint.command} color={theme.text} wrap="truncate">
+                {'  '} {commandHintLabel(hint)}
+              </Text>
+            ))}
+          </Box>
+        ))}
+      </Box>
+      <Text color={theme.warning}>Ctrl+P / Esc</Text>
+    </Panel>
+  );
+}
+
+export function ActiveCommandBar({ command }: { command: ActiveCommand }) {
+  const theme = useTheme();
+  return (
+    <Text color={theme.info} bold>
+      ◈ {command.label}
+      <Text color={theme.muted} dimColor>
+        {' '}· Esc
+      </Text>
+    </Text>
+  );
+}
+
+export function PendingQueue({ items }: { items: string[] }) {
+  const theme = useTheme();
+  if (!items.length) return null;
+  const recent = items.slice(-3);
+  const hiddenCount = items.length - recent.length;
+  return (
+    <Box
+      flexDirection="column"
+      marginTop={1}
+      paddingX={1}
+      backgroundColor={theme.surfaceAlt}
+    >
+      <Text color={theme.warning} bold wrap="truncate">
+        ⏳ 等待执行 · {items.length}
+      </Text>
+      {recent.map((item, index) => (
+        <Text key={`${index}-${item}`} color={theme.text} wrap="truncate">
+          <Text color={theme.muted}>{items.length - recent.length + index + 1}.</Text>
+          {' '}
+          {truncateByWidth(item.replace(/\s+/g, ' ').trim(), 90)}
+        </Text>
+      ))}
+      {hiddenCount > 0 ? (
+        <Text color={theme.muted} dimColor>
+          … 还有 {hiddenCount} 条
+        </Text>
+      ) : null}
+      <Text color={theme.muted} dimColor>
+        Ctrl+Z 撤回最后一个
+      </Text>
+    </Box>
+  );
 }
 
 export function PromptBar({
   input,
   running,
-  bordered = true,
+  bordered = false,
+  width,
+  placeholder,
 }: {
   input: string;
   running: boolean;
   bordered?: boolean;
+  width?: number;
+  placeholder?: string;
 }) {
   const theme = useTheme();
   const { stdout } = useStdout();
   const columns = stdout.columns || 80;
+  const availableWidth = width ?? Math.max(12, columns - (bordered ? 8 : 2));
   const [cursorOn, setCursorOn] = useState(true);
   useEffect(() => {
-    if (running) return;
     const timer = setInterval(() => setCursorOn((current) => !current), 500);
     return () => clearInterval(timer);
-  }, [running]);
-  const maxInput = Math.max(12, columns - 8);
-  const raw = input || (running ? '执行中 · Ctrl+C 取消' : '输入任务 · /help 查看命令');
+  }, []);
+  const maxInput = Math.max(12, availableWidth - 8);
+  const raw = input || (running ? '' : placeholder || '输入任务…');
   const oneLine = raw.replace(/\r?\n/g, '⏎');
-  const display = oneLine.length > maxInput ? `${oneLine.slice(0, maxInput - 1)}…` : oneLine;
-  const caret = running ? '' : cursorOn ? '▌' : ' ';
+  const display = truncateByWidth(oneLine, maxInput);
+  const caret = cursorOn ? '▌' : ' ';
   const isPlaceholder = !input && !running;
   const body = (
-    <Box flexDirection="row">
-      <Text color={running ? theme.warning : theme.success} bold>
-        {running ? '●' : '❯'}
+    <Box flexDirection="row" width={availableWidth}>
+      <Text color={theme.brand} bold>
+        ❯
       </Text>
       {isPlaceholder ? (
         <>
-          <Text color={running ? theme.warning : theme.text}>{caret}</Text>
+          <Text color={theme.text}>{caret}</Text>
           <Text color={theme.muted} dimColor wrap="truncate">
             {display}
           </Text>
         </>
       ) : (
         <>
-          <Text color={running ? theme.warning : theme.text} wrap="truncate">
+          <Text color={theme.text} wrap="truncate">
             {' '}
             {display}
           </Text>
-          <Text color={running ? theme.warning : theme.text}>{caret}</Text>
+          <Text color={theme.text}>{caret}</Text>
         </>
       )}
     </Box>
   );
   return bordered ? (
-    <Panel color={running ? theme.warning : theme.success} border="single">
+    <Box
+      flexDirection="column"
+      borderStyle="single"
+      borderColor={theme.border}
+      borderTop={true}
+      borderBottom={true}
+      borderLeft={false}
+      borderRight={false}
+      width={width}
+    >
       {body}
-    </Panel>
+    </Box>
   ) : (
     body
   );
@@ -189,39 +608,30 @@ export function PromptBar({
 export function UserBlock({ text }: { text: string }) {
   const theme = useTheme();
   return (
-    <Panel color={theme.success} border="single">
-      <Text color={theme.success} bold>
-        ❯ 你
+    <Box flexDirection="row" marginBottom={1}>
+      <Text color={theme.brand} bold>
+        {'❯ '}
       </Text>
-      <Text color="white" wrap="wrap">
-        {text}
-      </Text>
-    </Panel>
-  );
-}
-
-export function AssistantBlock({ text }: { text: string }) {
-  const theme = useTheme();
-  return (
-    <Box flexDirection="column">
-      <Text color={theme.muted}>— Auraxis</Text>
-      <RichText text={text} />
+      <Box flexGrow={1}>
+        <Text color={theme.text} wrap="wrap">
+          <InlineMarkdown
+            text={text}
+            color={theme.text}
+            strongColor={theme.highlight}
+            codeColor={theme.info}
+          />
+        </Text>
+      </Box>
     </Box>
   );
 }
 
-function splitCodeBlocks(text: string): Array<{ code?: string; text?: string }> {
-  const result: Array<{ code?: string; text?: string }> = [];
-  const regex = /```(?:[\w-]+)?\n([\s\S]*?)```/g;
-  let last = 0;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(text))) {
-    if (match.index > last) result.push({ text: text.slice(last, match.index) });
-    result.push({ code: match[1].replace(/\n$/, '') });
-    last = regex.lastIndex;
-  }
-  if (last < text.length) result.push({ text: text.slice(last) });
-  return result;
+export function AssistantBlock({ text }: { text: string }) {
+  return (
+    <Box flexDirection="column" marginTop={1}>
+      <RichText text={text} />
+    </Box>
+  );
 }
 
 function RichText({ text }: { text: string }) {
@@ -231,14 +641,61 @@ function RichText({ text }: { text: string }) {
     <Box flexDirection="column">
       {blocks.map((block, index) =>
         block.code !== undefined ? (
-          <Text key={index} color={theme.info} wrap="wrap">
-            {block.code}
-          </Text>
+          isDiffCodeBlock(block) ? (
+            <DiffTextBlock key={index} text={block.code} />
+          ) : (
+            <Box
+              key={index}
+              backgroundColor={theme.surfaceAlt}
+              paddingX={1}
+              marginTop={1}
+              flexShrink={0}
+            >
+              <Text color={theme.text} wrap="wrap">
+                {block.code}
+              </Text>
+            </Box>
+          )
         ) : (
           <MarkdownText key={index} text={block.text || ''} />
         ),
       )}
     </Box>
+  );
+}
+
+function InlineMarkdown({
+  text,
+  color,
+  strongColor,
+  codeColor,
+}: {
+  text: string;
+  color: string;
+  strongColor: string;
+  codeColor: string;
+}) {
+  const segments = parseInlineMarkdown(text);
+  return (
+    <Text color={color} wrap="wrap">
+      {segments.map((segment, index) => {
+        if (segment.type === 'code') {
+          return (
+            <Text key={index} color={codeColor}>
+              {segment.text}
+            </Text>
+          );
+        }
+        if (segment.type === 'strong') {
+          return (
+            <Text key={index} color={strongColor} bold>
+              {segment.text}
+            </Text>
+          );
+        }
+        return segment.text;
+      })}
+    </Text>
   );
 }
 
@@ -251,59 +708,91 @@ function MarkdownText({ text }: { text: string }) {
         if (line.startsWith('### ')) {
           return (
             <Text key={index} color={theme.info} bold wrap="wrap">
-              {line.slice(4)}
+              <InlineMarkdown
+                text={line.slice(4)}
+                color={theme.info}
+                strongColor={theme.highlight}
+                codeColor={theme.info}
+              />
             </Text>
           );
         }
         if (line.startsWith('## ')) {
           return (
             <Text key={index} color={theme.info} bold wrap="wrap">
-              {line.slice(3)}
+              <InlineMarkdown
+                text={line.slice(3)}
+                color={theme.info}
+                strongColor={theme.highlight}
+                codeColor={theme.info}
+              />
             </Text>
           );
         }
         if (line.startsWith('# ')) {
           return (
             <Text key={index} color={theme.brand} bold wrap="wrap">
-              {line.slice(2)}
+              <InlineMarkdown
+                text={line.slice(2)}
+                color={theme.brand}
+                strongColor={theme.highlight}
+                codeColor={theme.info}
+              />
             </Text>
           );
         }
         if (line.startsWith('- ') || line.startsWith('* ')) {
           return (
-            <Text key={index} color={theme.success} wrap="wrap">
-              • {line.slice(2)}
+            <Text key={index} color={theme.text} wrap="wrap">
+              <Text color={theme.muted}>• </Text>
+              <InlineMarkdown
+                text={line.slice(2)}
+                color={theme.text}
+                strongColor={theme.highlight}
+                codeColor={theme.info}
+              />
             </Text>
           );
         }
         if (line.startsWith('> ')) {
           return (
             <Text key={index} color={theme.muted} wrap="wrap">
-              {line.slice(2)}
+              <Text color={theme.info}>│ </Text>
+              <InlineMarkdown
+                text={line.slice(2)}
+                color={theme.muted}
+                strongColor={theme.text}
+                codeColor={theme.info}
+              />
             </Text>
           );
         }
         return (
-          <Text key={index} color={theme.text} wrap="wrap">
-            {line}
-          </Text>
+          <InlineMarkdown
+            key={index}
+            text={line}
+            color={theme.text}
+            strongColor={theme.highlight}
+            codeColor={theme.info}
+          />
         );
       })}
     </Box>
   );
 }
 
-function DiffBlock({ text, color }: { text: string; color: string }) {
+function DiffLines({ text }: { text: string }) {
+  const theme = useTheme();
   const lines = text.split('\n');
   return (
-    <Box flexDirection="column" borderStyle="single" borderColor={color} paddingX={1} marginTop={1}>
+    <Box flexDirection="column">
       {lines.map((line, index) => {
-        const lineColor = line.startsWith('+') ? 'green' : line.startsWith('-') ? 'red' : 'dim';
+        const lineColor = line.startsWith('+') ? theme.success : line.startsWith('-') ? theme.danger : theme.muted;
         return (
           <Text
             key={index}
-            color={lineColor === 'dim' ? undefined : lineColor}
-            dimColor={lineColor === 'dim'}
+            color={lineColor}
+            dimColor={lineColor === theme.muted}
             wrap="wrap"
           >
             {line}
@@ -314,18 +803,43 @@ function DiffBlock({ text, color }: { text: string; color: string }) {
   );
 }
 
+function DiffTextBlock({ text }: { text: string }) {
+  const theme = useTheme();
+  return (
+    <Box backgroundColor={theme.surfaceAlt} paddingX={1} marginTop={1} flexShrink={0}>
+      <DiffLines text={text} />
+    </Box>
+  );
+}
+
+function DiffBlock({ text }: { text: string }) {
+  const theme = useTheme();
+  return (
+    <Box backgroundColor={theme.surfaceAlt} paddingX={1} marginTop={1} flexShrink={0}>
+      <DiffLines text={text} />
+    </Box>
+  );
+}
+
 export function ThinkingBlock({ text, expanded }: { text: string; expanded: boolean }) {
   const theme = useTheme();
-  const preview = text.replace(/\s+/g, ' ').trim().slice(0, 90);
   return (
-    <Panel color={theme.warning} border="single">
-      <Text color={theme.warning}>
-        ✦ 思考 {expanded ? '· Ctrl+T 收起' : '· Ctrl+T 展开'}
+    <Box flexDirection="column" marginTop={1}>
+      <Text color={theme.warning} bold>
+        {expanded ? '▾' : '▸'} ✦ 思考
+        <Text color={theme.muted} dimColor>
+          {' '}
+          · Ctrl+T
+        </Text>
       </Text>
-      <Text color="yellow" dimColor wrap="wrap">
-        {expanded ? text : preview}
-      </Text>
-    </Panel>
+      {expanded ? (
+        <Box marginLeft={2}>
+          <Text color={theme.muted} dimColor wrap="wrap">
+            {text}
+          </Text>
+        </Box>
+      ) : null}
+    </Box>
   );
 }
 
@@ -340,32 +854,230 @@ export function ToolBlock({
 }: {
   name: string;
   summary: string;
-  status?: 'running' | 'done' | 'error';
+  status?: 'running' | 'done' | 'error' | 'aborted';
   ok?: boolean;
   error?: string;
   duration?: number;
   output?: string;
 }) {
-  const theme = useTheme();
-  const color = status === 'error' || ok === false ? theme.danger : status === 'done' ? theme.success : theme.info;
-  const marker = status === 'error' ? '✗' : status === 'done' ? '✓' : status === 'running' ? '●' : '▸';
   return (
-    <Panel color={color} border="single">
+    <ToolStatusRow
+      name={name}
+      summary={summary}
+      status={status}
+      ok={ok}
+      error={error}
+      duration={duration}
+      output={output}
+      showOutput
+    />
+  );
+}
+
+function SkillCard({
+  skill,
+  selected,
+  width,
+}: {
+  skill: SkillRecord;
+  selected: boolean;
+  width: number;
+}) {
+  const theme = useTheme();
+  const fileName = skill.file.split(/[\\/]/).pop() || skill.file;
+  const description = (skill.description || '暂无描述').replace(/\s+/g, ' ').trim().slice(0, 96);
+  return (
+    <Box
+      width={width}
+      marginRight={1}
+      marginBottom={1}
+      borderStyle="round"
+      borderColor={selected ? theme.brandTo : theme.border}
+      backgroundColor={selected ? theme.surfaceAlt : undefined}
+      paddingX={1}
+      flexDirection="column"
+    >
       <Box flexDirection="row" justifyContent="space-between">
-        <Text color={color} bold>
-          {marker} {name}
+        <Text color={selected ? theme.text : theme.brandTo} bold={selected} wrap="truncate">
+          {selected ? '▸ ' : '  '}◆ {skill.name}
         </Text>
-        <Text dimColor>{duration !== undefined ? `${duration}ms` : status}</Text>
+        <Text color={theme.muted} wrap="truncate">
+          #{skill.id}
+        </Text>
       </Box>
-      <Text dimColor wrap="wrap">
-        {error || summary || '…'}
+      <Text color={selected ? theme.text : theme.muted} dimColor wrap="truncate">
+        {description}
       </Text>
-      {output ? (
-        <Text color={color} dimColor wrap="wrap">
-          {output.split('\n').slice(0, 5).join('\n')}
-          {output.split('\n').length > 5 ? `\n… 仅显示前 5 行` : ''}
+      <Text color={theme.muted} wrap="truncate">
+        {fileName}
+      </Text>
+    </Box>
+  );
+}
+
+function SkillDetailPanel({
+  skill,
+  content,
+}: {
+  skill: SkillRecord;
+  content: string;
+}) {
+  const theme = useTheme();
+  const body = content.replace(/^---\n[\s\S]*?\n---\n?/, '');
+  const lines = body.split(/\r?\n/).slice(0, 20);
+  return (
+    <Panel color={theme.brand} border="double" title={`技能详情 · ${skill.name}`}>
+      <Text color={theme.info}>
+        #{skill.id} · {skill.name}
+      </Text>
+      <Text color={theme.text} wrap="wrap">
+        {skill.description || '暂无描述'}
+      </Text>
+      <Text color={theme.muted} wrap="truncate">
+        {skill.file}
+      </Text>
+      <Box borderStyle="single" borderColor={theme.border} paddingX={1} marginTop={1}>
+        <Text color={theme.text} wrap="wrap">
+          {lines.join('\n') || '（空）'}
         </Text>
-      ) : null}
+        {body.split(/\r?\n/).length > lines.length ? (
+          <Text color={theme.muted}>… 内容较长，仅显示前 {lines.length} 行</Text>
+        ) : null}
+      </Box>
+      <Text color={theme.warning}>Esc</Text>
+    </Panel>
+  );
+}
+
+export function SkillsPanel({
+  skills,
+  selected,
+  detail,
+  detailContent,
+}: {
+  skills: SkillRecord[];
+  selected: number;
+  detail: SkillRecord | null;
+  detailContent: string;
+}) {
+  const theme = useTheme();
+  const { stdout } = useStdout();
+  if (detail) return <SkillDetailPanel skill={detail} content={detailContent} />;
+  const columns = stdout.columns || 80;
+  const cardWidth = Math.max(28, Math.min(42, Math.floor((columns - 8) / 2)));
+  return (
+    <Panel color={theme.brand} border="double" title={`技能卡片 · ${skills.length}`}>
+      <Text color={theme.muted}>↑↓ · Enter · Esc</Text>
+      {skills.length === 0 ? (
+        <Text color={theme.warning}>未找到技能。可在 .auraxis/skills、skills/ 或全局 ~/.auraxis/skills 创建 SKILL.md。</Text>
+      ) : (
+        <Box flexDirection="row" flexWrap="wrap" marginTop={1}>
+          {skills.map((skill, index) => (
+            <SkillCard
+              key={`${skill.file}:${skill.id}`}
+              skill={skill}
+              width={cardWidth}
+              selected={index === selected}
+            />
+          ))}
+        </Box>
+      )}
+    </Panel>
+  );
+}
+
+export function ModelPickerPanel({
+  models,
+  selected,
+  source,
+}: {
+  models: ModelChoice[];
+  selected: number;
+  source: 'live' | 'builtin';
+}) {
+  const theme = useTheme();
+  const { stdout } = useStdout();
+  const sourceLabel = source === 'live' ? '实时模型' : '离线内置模型';
+  const maxVisible = Math.max(4, Math.min(10, (stdout.rows || 24) - 8));
+  const start = Math.max(
+    0,
+    Math.min(
+      selected - Math.floor(maxVisible / 2),
+      Math.max(0, models.length - maxVisible),
+    ),
+  );
+  const visible = models.slice(start, start + maxVisible);
+  return (
+    <Panel color={theme.brand} border="double" title={`选择模型 · ${models.length}`}>
+      <Text color={theme.muted}>{sourceLabel} · ↑↓ · Enter · Esc</Text>
+      <Box flexDirection="column" marginTop={1}>
+        {models.length === 0 ? (
+          <Text color={theme.warning}>正在获取模型…</Text>
+        ) : (
+          <>
+            {start > 0 ? <Text color={theme.muted}>… 上方还有 {start} 个模型</Text> : null}
+            {visible.map((model, index) => {
+              const actual = start + index;
+              return (
+                <Text
+                  key={model.id}
+                  color={actual === selected ? theme.text : theme.muted}
+                  bold={actual === selected}
+                  wrap="truncate"
+                >
+                  {actual === selected ? '▸' : ' '} {model.id}
+                  {model.name && model.name !== model.id ? ` · ${model.name}` : ''}
+                  {model.experimental ? ' · 实验' : ''}
+                </Text>
+              );
+            })}
+            {start + maxVisible < models.length ? (
+              <Text color={theme.muted}>… 下方还有 {models.length - start - maxVisible} 个模型</Text>
+            ) : null}
+          </>
+        )}
+      </Box>
+      <Text color={theme.warning}>Enter 切换 · Esc 取消</Text>
+    </Panel>
+  );
+}
+
+export function ChoicePickerPanel({ picker }: { picker: ChoicePickerState }) {
+  const theme = useTheme();
+  const { stdout } = useStdout();
+  const maxVisible = Math.max(4, Math.min(10, (stdout.rows || 24) - 8));
+  const start = Math.max(
+    0,
+    Math.min(
+      picker.selected - Math.floor(maxVisible / 2),
+      Math.max(0, picker.options.length - maxVisible),
+    ),
+  );
+  const visible = picker.options.slice(start, start + maxVisible);
+  return (
+    <Panel color={theme.brand} border="double" title={picker.title}>
+      <Text color={theme.muted}>↑↓ · Enter · Esc</Text>
+      <Box flexDirection="column" marginTop={1}>
+        {start > 0 ? <Text color={theme.muted}>… 上方还有 {start} 项</Text> : null}
+        {visible.map((option: ChoiceOption, index) => {
+          const actual = start + index;
+          return (
+          <Text
+            key={option.id}
+            color={actual === picker.selected ? theme.text : theme.muted}
+            bold={actual === picker.selected}
+            wrap="truncate"
+          >
+            {actual === picker.selected ? '▸' : ' '} {option.label}
+            {option.description ? ` · ${option.description}` : ''}
+          </Text>
+          );
+        })}
+        {start + maxVisible < picker.options.length ? (
+          <Text color={theme.muted}>… 下方还有 {picker.options.length - start - maxVisible} 项</Text>
+        ) : null}
+      </Box>
+      <Text color={theme.warning}>Enter 选择 · Esc 取消</Text>
     </Panel>
   );
 }
@@ -376,7 +1088,7 @@ export function PlanBlock({ plan }: { plan: Plan }) {
   return (
     <Panel color={theme.plan} border="double" title={`计划 · ${plan.tasks.length} 项`}>
       {plan.tasks.map((task) => (
-        <Text key={task.id} color={task.status === 'completed' ? 'green' : approved.has(task.id) ? 'white' : 'dim'} wrap="wrap">
+        <Text key={task.id} color={task.status === 'completed' ? theme.success : approved.has(task.id) ? theme.text : theme.muted} wrap="wrap">
           {task.status === 'completed' ? '✓' : task.status === 'running' ? '●' : task.status === 'blocked' ? '✗' : '○'} {task.id}. {task.description}
         </Text>
       ))}
@@ -395,14 +1107,11 @@ export function PermissionBlock({ request }: { request: PermissionRequest }) {
       <Text dimColor wrap="wrap">
         {request.summary}
       </Text>
-      <Text dimColor wrap="wrap">
-        {JSON.stringify(request.args, null, 2)}
-      </Text>
       {request.preview ? (
-        <DiffBlock text={request.preview} color={color} />
+        <DiffBlock text={request.preview} />
       ) : null}
-      <Text color="yellow">
-        [y]允许一次 · [a]允许本会话 · [r]允许当前规则 · [n]拒绝
+      <Text color={theme.warning}>
+        [y] [a] [r] [n]
       </Text>
     </Panel>
   );
@@ -413,7 +1122,6 @@ export function AskBlock({ question }: { question: string }) {
   return (
     <Panel color={theme.success} border="double" title="需要你回答">
       <Text color={theme.success}>{question}</Text>
-      <Text dimColor>输入回答后按 Enter</Text>
     </Panel>
   );
 }
@@ -432,152 +1140,18 @@ export function SystemBlock({ text }: { text: string }) {
   );
 }
 
-function formatSessionTime(seconds: number): string {
-  const hours = Math.floor(seconds / 3600).toString().padStart(2, '0');
-  const minutes = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
-  const secs = (seconds % 60).toString().padStart(2, '0');
-  return `${hours}:${minutes}:${secs}`;
-}
+const WIDE_TITLE_LINES = [
+  ' █████╗ ██╗   ██╗██████╗  █████╗ ██╗  ██╗██╗███████╗     █████╗  ██████╗ ███████╗███╗   ██╗████████╗',
+  '██╔══██╗██║   ██║██╔══██╗██╔══██╗╚██╗██╔╝██║██╔════╝    ██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝',
+  '███████║██║   ██║██████╔╝███████║ ╚███╔╝ ██║███████╗    ███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║   ',
+  '██╔══██║██║   ██║██╔══██╗██╔══██║ ██╔██╗ ██║╚════██║    ██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║   ',
+  '██║  ██║╚██████╔╝██║  ██║██║  ██║██╔╝ ██╗██║███████║    ██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║   ',
+  '╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚══════╝    ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝   ',
+];
+const WIDE_TITLE_SPLIT = 56;
+const COMPACT_TITLE_LINES = buildBlockTitle('AURAXIS AGENT');
+const COMPACT_TITLE_SPLIT = buildBlockTitle('AURAXIS')[0].length + 2;
 
-function QuickStartCard({
-  icon = '',
-  command,
-  description,
-  width,
-}: {
-  icon?: string;
-  command: string;
-  description: string;
-  width?: number;
-}) {
-  const theme = useTheme();
-  return (
-    <Box width={width} flexGrow={width ? 0 : 1} borderStyle="round" borderColor={theme.muted} paddingX={1} flexDirection="column">
-      <Box flexDirection="row">
-        <Text color={theme.brand}>{icon}</Text>
-        <Text color={theme.info} bold wrap="truncate">
-          {' '}
-          {command}
-        </Text>
-      </Box>
-      <Text color={theme.text} dimColor wrap="truncate">
-        {description}
-      </Text>
-    </Box>
-  );
-}
-
-export function RichHomeCard({
-  project,
-  branch,
-  model,
-  mode,
-  sandbox,
-  version,
-  running,
-}: {
-  project: string;
-  branch: string;
-  model: string;
-  mode: string;
-  sandbox: string;
-  version: string;
-  running: boolean;
-}) {
-  const theme = useTheme();
-  const [sessionSeconds, setSessionSeconds] = useState(0);
-  const home = os.homedir();
-  const { stdout } = useStdout();
-  const displayProject = project.startsWith(home) ? `~${project.slice(home.length)}` : project;
-  const cardWidth = stdout.columns || 80;
-  useEffect(() => {
-    const timer = setInterval(() => setSessionSeconds((current) => current + 1), 1000);
-    return () => clearInterval(timer);
-  }, []);
-  const commands = [
-    { command: '/chat', description: '开始对话' },
-    { command: '/init', description: '初始化项目' },
-    { command: '/run <file>', description: '运行文件' },
-    { command: '/config', description: '配置设置' },
-    { command: '/help', description: '查看帮助' },
-  ];
-  return (
-    <Box flexDirection="column">
-      <Panel color={theme.brand} border="round">
-        <Box flexDirection="row">
-          <Box flexDirection="column">
-            <Box flexDirection="row" alignItems="center">
-              <Text color={theme.brand} bold>
-                ▲
-              </Text>
-              <Text color={theme.info} dimColor>
-                {' '}
-                ✦ ✧
-              </Text>
-              <Text color={theme.brand} bold>
-                {' '}
-                Auraxis Agent CLI
-              </Text>
-            </Box>
-            <Text color={theme.text} dimColor>
-              智能协作 · 代码理解 · 自动化执行
-            </Text>
-            <Box flexDirection="row" marginTop={1}>
-              <Text color={theme.success} bold>
-                ● 已连接到 Auraxis Agent
-              </Text>
-              <Text color={theme.muted}>
-                {' '}
-                · 版本 {version}
-              </Text>
-            </Box>
-          </Box>
-          <Box flexDirection="column" marginLeft={2}>
-            <Text color={theme.muted}>
-              cwd: <Text color={theme.text}>{displayProject}</Text>
-            </Text>
-            <Text color={theme.muted}>
-              branch: <Text color={theme.text}>{branch}</Text>
-            </Text>
-            <Text color={theme.muted}>
-              model: <Text color={theme.text}>{model}</Text>
-            </Text>
-            <Text color={theme.muted}>
-              mode: <Text color={theme.text}>{mode}</Text>
-            </Text>
-            <Text color={theme.muted}>
-              sandbox: <Text color={theme.text}>{sandbox}</Text>
-            </Text>
-            <Text color={theme.muted}>
-              session: <Text color={theme.brand}>{formatSessionTime(sessionSeconds)}</Text>
-            </Text>
-            <Text color={theme.info} dimColor>
-              {running ? '● 运行中' : '● 就绪'}
-            </Text>
-          </Box>
-        </Box>
-      </Panel>
-      <Panel color={theme.muted} border="single" title="快速开始">
-        <Box flexDirection="row">
-          {commands.map((command) => (
-            <QuickStartCard key={command.command} {...command} />
-          ))}
-        </Box>
-      </Panel>
-      <Panel color={theme.info} border="single">
-        <Text color={theme.warning}>
-          💡 提示
-        </Text>
-        <Text color={theme.text} dimColor>
-          输入 natural language 或使用 / 命令触发智能能力 ·
-        </Text>
-        <Text color={theme.info}>
-          /help 查看全部命令
-        </Text>
-      </Panel>
-    </Box>
-  );
-}
 
 function CommandChip({
   icon,
@@ -592,324 +1166,223 @@ function CommandChip({
   return (
     <Box
       borderStyle="round"
-      borderColor={selected ? theme.brand : theme.muted}
-      paddingX={0}
+      borderColor={selected ? theme.brandTo : theme.border}
+      backgroundColor={selected ? theme.surfaceAlt : undefined}
+      width={18}
+      flexDirection="column"
+      alignItems="flex-start"
+      paddingX={1}
+      paddingY={0}
       marginRight={1}
+      flexGrow={0}
+      flexShrink={0}
     >
-      <Text color={selected ? theme.brand : theme.info} bold={selected} wrap="wrap">
-        {icon} {label}
-      </Text>
-    </Box>
-  );
-}
-
-export function HomeCard({
-  project,
-  branch,
-  model,
-  mode,
-  sandbox,
-  version,
-  running,
-  input,
-  homeFocus,
-  selectedCommand,
-  appMode,
-}: {
-  project: string;
-  branch: string;
-  model: string;
-  mode: string;
-  sandbox: string;
-  version: string;
-  running: boolean;
-  input: string;
-  homeFocus: 'input' | 'commands';
-  selectedCommand: number;
-  appMode: 'chat' | 'work' | 'code';
-}) {
-  const theme = useTheme();
-  const [sessionSeconds, setSessionSeconds] = useState(0);
-  const home = os.homedir();
-  const { stdout } = useStdout();
-  const displayProject = project.startsWith(home) ? `~${project.slice(home.length)}` : project;
-  const cardWidth = stdout.columns || 80;
-
-  useEffect(() => {
-    const timer = setInterval(() => setSessionSeconds((current) => current + 1), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const commands = [
-    { icon: '▣', command: '/chat', description: '对话' },
-    { icon: '▦', command: '/work', description: '文档协作' },
-    { icon: '⌘', command: '/code', description: '代码执行' },
-    { icon: '◈', command: '/agents', description: '多 Agent' },
-    { icon: '⛁', command: '/mcp', description: '扩展集成' },
-  ];
-  const fullDivider = Array.from({ length: 8 }, () => '│').join('\n');
-
-  return (
-    <Box flexDirection="column" width={cardWidth}>
-      <Panel color={theme.brand} border="round" width={cardWidth}>
-        <Box flexDirection="row">
-          <Box flexDirection="column">
-            <Text color={theme.brand} bold>
-              ❯_ Auraxis Agent CLI
-            </Text>
-            <Box flexDirection="row" marginTop={1}>
-              {commands.map((command, index) => (
-                <CommandChip
-                  key={command.command}
-                  icon={command.icon}
-                  label={command.command}
-                  selected={homeFocus === 'commands' && selectedCommand === index}
-                />
-              ))}
-            </Box>
-            <Box marginTop={1}>
-              <Text color={theme.muted}>
-                Tab 切换命令 · ← → 选择 · Enter 执行 · 1-5 直达
-              </Text>
-            </Box>
-          </Box>
-          <Text color={theme.muted}>
-            {fullDivider}
+      <Box flexDirection="column" width={14} alignItems="flex-start">
+        <Box flexDirection="row" alignItems="center">
+          <Text color={selected ? theme.text : theme.brandTo} bold={selected}>
+            {icon}
           </Text>
-          <Box flexDirection="column" marginLeft={2}>
-            <Text color={theme.muted}>{displayProject}</Text>
-            <Text color={theme.muted}>{branch}</Text>
-            <Text color={theme.muted}>{model}</Text>
-            <Text color={theme.muted}>{appMode.toUpperCase()}</Text>
-            <Text color={theme.brand}>{formatSessionTime(sessionSeconds)}</Text>
-          </Box>
+          <Text color={selected ? theme.text : theme.muted} bold={selected} wrap="truncate">
+            {' '}
+            {label}
+          </Text>
         </Box>
-      </Panel>
-      <Box width={cardWidth}>
-        <PromptBar input={input} running={running} />
       </Box>
     </Box>
   );
 }
 
-export function LegacyHomeCard({
-  project,
-  branch,
-  model,
-  mode,
-  sandbox,
-  version,
-  running,
-  input,
-  homeFocus,
-  selectedCommand,
-}: {
-  project: string;
-  branch: string;
-  model: string;
-  mode: string;
-  sandbox: string;
-  version: string;
-  running: boolean;
-  input: string;
-  homeFocus: 'input' | 'commands';
-  selectedCommand: number;
-}) {
+const TOOL_ICONS: Record<string, string> = {
+  Read: '▤',
+  ReadImage: '◫',
+  RunCode: '⌘',
+  RunWorkflow: '⇄',
+  Write: '✎',
+  Edit: '✎',
+  StrReplaceEditor: '⌨',
+  Delete: '✕',
+  NotebookEdit: '▤',
+  Grep: '⌕',
+  Glob: '▦',
+  ListFiles: '☰',
+  Bash: '❯',
+  Pwsh: '⚡',
+  WebFetch: '↗',
+  WebSearch: '⊕',
+  TodoWrite: '☑',
+  AskUser: '?',
+  InspectRuntime: '⌖',
+  Agent: '⚑',
+  SpawnAgents: '◈',
+  MemoryRemember: '◆',
+  MemorySearch: '⌖',
+  PluginManage: '⌘',
+  FindSymbol: '⌕',
+  LspDefinition: '?',
+  LspReferences: '↔',
+  RemoteAgent: '☁',
+  SendMessage: '✉',
+  ReadMessages: '✉',
+  PublishArtifact: '□',
+  ListArtifacts: '▣',
+  CreatePullRequest: '⎇',
+  Undo: '↶',
+  GitStatus: '⎇',
+  GitDiff: '±',
+  GitLog: '↺',
+  GitCommit: '⬆',
+  ListSkills: '≣',
+  ReadSkill: '▤',
+  ReviewArtifact: '✓',
+  TaskOutput: '▣',
+  TaskStop: '■',
+  TaskList: '▤',
+  JobList: '▤',
+  JobOutput: '▣',
+  JobKill: '■',
+  Pty: '⌨',
+  TerminalOpen: '⌨',
+  TerminalList: '▤',
+  TerminalRead: '▣',
+  TerminalSend: '⌨',
+  TerminalSignal: '■',
+  TerminalClose: '✕',
+};
+
+export function toolIcon(name: string): string {
+  return TOOL_ICONS[name] || '⚙';
+}
+
+export function CodeOutputBlock({ lines, running }: { lines: string[]; running: boolean }) {
   const theme = useTheme();
-  const [sessionSeconds, setSessionSeconds] = useState(0);
-  const home = os.homedir();
-  const { stdout } = useStdout();
-  const wideFooter = (stdout.columns || 80) >= 108;
-  const displayProject = project.startsWith(home) ? `~${project.slice(home.length)}` : project;
-
-  useEffect(() => {
-    const timer = setInterval(() => setSessionSeconds((current) => current + 1), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const footerCommands = [
-    { icon: '▣', command: '/chat', description: '开始对话' },
-    { icon: '◇', command: '/init', description: '初始化项目' },
-    { icon: '▸', command: '/run <file>', description: '运行文件' },
-    { icon: '☰', command: '/config', description: '配置设置' },
-    { icon: '?', command: '/help', description: '查看更多命令' },
-  ];
-
+  const tail = lines.slice(-10);
   return (
-    <Box flexDirection="column">
-      <Panel color={theme.brand} border="round">
-        <Box flexDirection="row">
-          <Box flexDirection="column" flexGrow={1}>
-            <Box flexDirection="row" alignItems="flex-start">
-              <Text color={theme.info} bold>
-                ❯_
-              </Text>
-              <Box flexDirection="column" marginLeft={1}>
-                <Text color={theme.brand} bold>
-                  Auraxis
-                </Text>
-                <Text color={theme.text} bold>
-                  Agent CLI
-                </Text>
-                <Box flexDirection="row" marginTop={1}>
-                  <Text color={theme.success} bold>
-                    ● 已连接到 Auraxis Agent
-                  </Text>
-                  <Text color={theme.muted}>
-                    {' '}· 版本 {version}
-                  </Text>
-                </Box>
-              </Box>
-            </Box>
-          </Box>
-          <Text color={theme.muted}>
-            {'│\n│\n│\n│'}
+    <Box
+      flexDirection="column"
+      paddingX={1}
+      marginTop={1}
+      backgroundColor={theme.surfaceAlt}
+    >
+      <Box flexDirection="row" flexShrink={0}>
+        <Text color={running ? theme.warning : theme.success} bold>
+          {running ? '● Code' : '✓ Code'}
+        </Text>
+        {running ? <Text color={theme.warning}>{' '}<Spinner /></Text> : null}
+      </Box>
+      <Box flexDirection="column">
+        {tail.map((line, index) => (
+          <Text key={index} color={theme.text} wrap="wrap">
+            {line}
           </Text>
-          <Box flexDirection="column">
-            <Text color={theme.muted}>
-              ▣ 工作目录
-            </Text>
-            <Text color={theme.text}>
-              {displayProject}
-            </Text>
-            <Text color={theme.muted}>
-              ⑂ 当前分支
-            </Text>
-            <Text color={theme.text}>
-              {branch}
-            </Text>
-            <Text color={theme.muted}>
-              ◷ 会话时间
-            </Text>
-            <Text color={theme.brand}>
-              {formatSessionTime(sessionSeconds)}
-            </Text>
-          </Box>
-        </Box>
-      </Panel>
-      <Panel color={theme.muted} border="single">
-        <Box flexDirection="column">
-          <Box flexDirection="row">
-            {wideFooter
-              ? footerCommands.map((command) => (
-                  <QuickStartCard key={command.command} {...command} width={20} />
-                ))
-              : footerCommands.slice(0, 3).map((command) => (
-                  <QuickStartCard key={command.command} {...command} width={24} />
-                ))}
-          </Box>
-          {!wideFooter ? (
-            <Box flexDirection="row" marginTop={1}>
-              {footerCommands.slice(3).map((command) => (
-                <QuickStartCard key={command.command} {...command} width={34} />
-              ))}
-            </Box>
-          ) : null}
-        </Box>
-      </Panel>
-      <PromptBar input={input} running={running} />
+        ))}
+      </Box>
     </Box>
   );
 }
 
-export function CompactHomeCard({
-  project,
-  branch,
-  model,
-  mode,
-  sandbox,
-  version,
-  running,
-  input,
+export function CodeToolRow({
+  name,
+  status,
+  ok,
+  error,
+  duration,
 }: {
-  project: string;
-  branch: string;
-  model: string;
-  mode: string;
-  sandbox: string;
+  name: string;
+  status?: 'running' | 'done' | 'error' | 'aborted';
+  ok?: boolean;
+  error?: string;
+  duration?: number;
+}) {
+  return (
+    <ToolStatusRow
+      name={name}
+      status={status}
+      ok={ok}
+      error={error}
+      duration={duration}
+      compact
+    />
+  );
+}
+
+export function HomeCard({
+  version,
+  project,
+  model,
+  permission,
+  reasoningEffort,
+  homeFocus,
+  selectedCommand,
+}: {
   version: string;
-  running: boolean;
-  input: string;
+  project: string;
+  model: string;
+  permission: string;
+  reasoningEffort: string;
+  homeFocus: 'input' | 'commands';
+  selectedCommand: number;
 }) {
   const theme = useTheme();
-  const [sessionSeconds, setSessionSeconds] = useState(0);
-  const home = os.homedir();
   const { stdout } = useStdout();
-  const wideFooter = (stdout.columns || 80) >= 108;
-  const displayProject = project.startsWith(home) ? `~${project.slice(home.length)}` : project;
+  const terminalWidth = stdout.columns || 80;
+  const useWideTitle = terminalWidth >= WIDE_TITLE_LINES[0].length + 10;
+  const titleLines = useWideTitle ? WIDE_TITLE_LINES : COMPACT_TITLE_LINES;
+  const titleSplit = useWideTitle ? WIDE_TITLE_SPLIT : COMPACT_TITLE_SPLIT;
+  const contentWidth = useWideTitle
+    ? Math.max(20, Math.min(112, terminalWidth) - 2)
+    : Math.max(20, Math.min(88, terminalWidth) - 2);
+  const pathLabel = shortenProjectPath(project, os.homedir(), 22);
+  const permissionColor =
+    permission === 'auto' ? theme.success : permission === 'plan' ? theme.plan : permission === 'ask' ? theme.warning : theme.info;
 
-  useEffect(() => {
-    const timer = setInterval(() => setSessionSeconds((current) => current + 1), 1000);
-    return () => clearInterval(timer);
-  }, []);
-  const footerCommands = [
-    { icon: '▣', command: '/chat', description: '开始对话' },
-    { icon: '◇', command: '/init', description: '初始化项目' },
-    { icon: '▸', command: '/run <file>', description: '运行文件' },
-    { icon: '☰', command: '/config', description: '配置设置' },
-    { icon: '?', command: '/help', description: '查看更多命令' },
-  ];
+  const commandChips = HOME_COMMANDS.map((command, index) => (
+    <CommandChip
+      key={command.command}
+      icon={command.icon}
+      label={command.command}
+      selected={homeFocus === 'commands' && selectedCommand === index}
+    />
+  ));
 
   return (
-    <Box flexDirection="column">
-      <Panel color={theme.brand} border="round">
-        <Box flexDirection="row">
-          <Box flexDirection="column" flexGrow={1}>
-            <Box flexDirection="row">
-              <Text color={theme.info} bold>
-                ❯_
-              </Text>
-              <Text color={theme.brand} bold>
-                {'  '}Auraxis Agent
-              </Text>
+    <Box flexDirection="column" width={contentWidth}>
+      <Panel color={theme.border} border="double" width={contentWidth} paddingY={0}>
+        <Box flexDirection="column" width={contentWidth}>
+          {titleLines.map((line) => (
+            <Text key={line} color={theme.brandFrom} bold>
+              {line.slice(0, titleSplit)}
+              <Text color={theme.brandTo}>{line.slice(titleSplit)}</Text>
+            </Text>
+          ))}
+          <Box marginTop={1}>
+            <Text color={theme.text} bold>
+              ❯_ Auraxis Agent CLI{' '}
               <Text color={theme.muted} dimColor>
-                {' '}(v{version})
+                v{version}
+              </Text>
+            </Text>
+          </Box>
+          <Box flexDirection="column" marginTop={1}>
+            <Text wrap="truncate">
+              <Text color={theme.muted}>模型 ：</Text>
+              <Text color={theme.text}>{model}</Text>
+              <Text color={theme.muted}>  模式 ：</Text>
+              <Text color={permissionColor}>{permission}</Text>
+              <Text color={theme.muted}>  思考 ：</Text>
+              <Text color={theme.text}>{reasoningEffort}</Text>
+            </Text>
+            <Box marginTop={1}>
+              <Text wrap="truncate">
+                <Text color={theme.muted}>路径 ：</Text>
+                <Text color={theme.text}>{pathLabel}</Text>
               </Text>
             </Box>
-            <Text color={theme.text}>
-              Tips: 输入自然语言开始对话，或使用 / 命令
-            </Text>
-          </Box>
-          <Text color={theme.muted}>
-            {'│\n│\n│\n│\n│'}
-          </Text>
-          <Box flexDirection="column">
-            <Text color={theme.muted}>
-              cwd: <Text color={theme.text}>{displayProject}</Text>
-            </Text>
-            <Text color={theme.muted}>
-              branch: <Text color={theme.text}>{branch}</Text>
-            </Text>
-            <Text color={theme.muted}>
-              model: <Text color={theme.text}>{model}</Text>
-            </Text>
-            <Text color={theme.muted}>
-              session: <Text color={theme.brand}>{formatSessionTime(sessionSeconds)}</Text>
-            </Text>
           </Box>
         </Box>
       </Panel>
-      <Panel color={theme.muted} border="single">
-        <Box flexDirection="column">
-          <Box flexDirection="row">
-            {wideFooter
-              ? footerCommands.map((command) => (
-                  <QuickStartCard key={command.command} {...command} width={20} />
-                ))
-              : footerCommands.slice(0, 3).map((command) => (
-                  <QuickStartCard key={command.command} {...command} width={24} />
-                ))}
-          </Box>
-          {!wideFooter ? (
-            <Box flexDirection="row" marginTop={1}>
-              {footerCommands.slice(3).map((command) => (
-                <QuickStartCard key={command.command} {...command} width={34} />
-              ))}
-            </Box>
-          ) : null}
-        </Box>
-      </Panel>
-      <PromptBar input={input} running={running} />
+      <Box flexDirection="row" flexWrap="wrap" marginTop={1}>
+        {commandChips}
+      </Box>
     </Box>
   );
 }

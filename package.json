@@ -1,7 +1,8 @@
 {
   "name": "auraxis-cli-monorepo",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "workspaces": [
     "packages/*"
@@ -14,21 +15,43 @@
     "dev": "npm run dev -w @auraxis/cli",
     "start": "npm run start -w @auraxis/cli",
     "cli": "npm run start -w @auraxis/cli --",
-    "build": "npm run build -w @auraxis/cli",
+    "build": "npm run build -w @auraxis/core && npm run build -w @auraxis/cli",
+    "build:native": "bun run scripts/build-binaries.mjs",
+    "build:native:all": "bun run scripts/build-binaries.mjs --all",
+    "pack:check": "npm pack -w @auraxis/core --dry-run && npm pack -w @auraxis/cli --dry-run",
+    "version:check": "node scripts/check-version.mjs",
     "typecheck": "npm run typecheck -w @auraxis/core && npm run typecheck -w @auraxis/cli",
     "test": "npm run test -w @auraxis/core && npm run test -w @auraxis/cli",
+    "coverage": "npm run coverage -w @auraxis/core && npm run coverage -w @auraxis/cli",
+    "coverage:gate": "npm run coverage:gate -w @auraxis/core && npm run coverage:gate -w @auraxis/cli",
     "e2e": "node scripts/e2e-cli.mjs",
-    "check": "npm run typecheck && npm run test && npm run build && npm run e2e"
+    "e2e:bash": "node scripts/e2e-cli-bash.mjs",
+    "e2e:code": "node scripts/e2e-code-mode.mjs",
+    "e2e:container": "node scripts/e2e-container.mjs",
+    "e2e:live": "node scripts/e2e-live.mjs",
+    "e2e:lsp": "node scripts/e2e-lsp.mjs",
+    "e2e:native": "node scripts/e2e-native.mjs",
+    "e2e:app-server": "node scripts/e2e-app-server.mjs",
+    "e2e:sdk": "node scripts/e2e-sdk.mjs",
+    "test:practical": "npm run build -w @auraxis/core && npm run build -w @auraxis/cli && node scripts/practical-matrix.mjs",
+    "check:native": "npm run build:native && npm run e2e:native",
+    "check:integration": "npm run e2e:lsp && npm run e2e:live && npm run e2e:container",
+    "check:all": "npm run check && npm run test:practical && npm run e2e:app-server && npm run e2e:sdk && npm run build:native:all && npm run e2e:native && npm run pack:check",
+    "check": "npm run version:check && npm run build -w @auraxis/core && npm run typecheck && npm run test && npm run coverage:gate && npm run build -w @auraxis/cli && npm run e2e && npm run e2e:bash && npm run e2e:code && npm run e2e:lsp && npm run e2e:container"
   },
   "devDependencies": {
     "@types/node": "^26.3.0",
     "@types/pngjs": "^6.0.5",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
+    "@vitest/coverage-v8": "^4.1.11",
+    "bun": "^1.4.0",
     "esbuild": "^0.25.12",
     "pngjs": "^7.0.0",
     "tsx": "^4.23.12",
     "typescript": "^7.0.2",
+    "typescript-language-server": "^6.0.0",
+    "typescript5": "npm:typescript@^5.9.3",
     "vitest": "^4.1.11"
   }
 }
