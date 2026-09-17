@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import { startBackgroundCommand } from '../tasks.js';
 import { safeProcessEnv } from '../safe-env.js';
 import type { JsonObject } from '../types.js';
@@ -11,7 +12,20 @@ function resolveShell(): [string, string[]] {
   if (process.platform === 'win32') {
     return [process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c']];
   }
-  return [process.env.SHELL || '/bin/sh', ['-c']];
+  // 容器等最小环境里 $SHELL 常指向不存在的路径（如只有 /bin/sh 的镜像），
+  // 直接 spawn 会 ENOENT，这里回退到 POSIX 保证存在的 /bin/sh。
+  const configured = process.env.SHELL;
+  if (configured && fileExists(configured)) return [configured, ['-c']];
+  return ['/bin/sh', ['-c']];
+}
+
+function fileExists(target: string): boolean {
+  try {
+    fs.accessSync(target, fs.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function isInteractiveShellCommand(command: string): boolean {

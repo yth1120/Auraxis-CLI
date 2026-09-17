@@ -85,8 +85,12 @@ describe('shell edge cases', () => {
   });
 
   it('uses ComSpec on Windows when available', async () => {
-    const originalShell = process.env.AURAXIS_SHELL;
-    const originalComSpec = process.env.ComSpec;
+    const original = { shell: process.env.AURAXIS_SHELL, comSpec: process.env.ComSpec };
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    // 未设置 AURAXIS_SHELL 时 Windows 默认走 `spawn(command, { shell: true })`，
+    // 由 Node 自行选择 ComSpec；resolveShell() 的 ComSpec 分支在显式指定
+    // AURAXIS_SHELL 的场景之外不会命中，这里验证实际使用的调用形态。
     delete process.env.AURAXIS_SHELL;
     process.env.ComSpec = String.raw`C:\custom\cmd.exe`;
     try {
@@ -94,14 +98,54 @@ describe('shell edge cases', () => {
       spawnMock.spawn.mockReturnValue(child as never);
       const pending = bashTool({ command: 'echo hi' }, context());
       await vi.waitFor(() => expect(spawnMock.spawn).toHaveBeenCalled());
-      expect(spawnMock.spawn.mock.calls[0][0]).toBe('echo hi');
+      const [command, options] = spawnMock.spawn.mock.calls[0] as unknown as [string, { shell?: boolean }];
+      expect(command).toBe('echo hi');
+      expect(options.shell).toBe(true);
       child.emit('close', 0);
       await pending;
     } finally {
-      if (originalShell === undefined) delete process.env.AURAXIS_SHELL;
-      else process.env.AURAXIS_SHELL = originalShell;
-      if (originalComSpec === undefined) delete process.env.ComSpec;
-      else process.env.ComSpec = originalComSpec;
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+      if (original.shell === undefined) delete process.env.AURAXIS_SHELL;
+      else process.env.AURAXIS_SHELL = original.shell;
+      if (original.comSpec === undefined) delete process.env.ComSpec;
+      else process.env.ComSpec = original.comSpec;
+    }
+  });
+
+  it('honors AURAXIS_SHELL and falls back to /bin/sh when $SHELL is unusable', async () => {
+    const original = { auraxisShell: process.env.AURAXIS_SHELL, shell: process.env.SHELL };
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+    try {
+      process.env.AURAXIS_SHELL = '/custom/shell';
+      const overridden = fakeChild();
+      spawnMock.spawn.mockReturnValue(overridden as never);
+      const pendingOverride = bashTool({ command: 'echo hi' }, context());
+      await vi.waitFor(() => expect(spawnMock.spawn).toHaveBeenCalled());
+      const [overrideExecutable, overrideArgs] = spawnMock.spawn.mock.calls[0] as unknown as [string, string[]];
+      expect(overrideExecutable).toBe('/custom/shell');
+      expect(overrideArgs).toEqual(['-c', 'echo hi']);
+      overridden.emit('close', 0);
+      await pendingOverride;
+
+      spawnMock.spawn.mockClear();
+      delete process.env.AURAXIS_SHELL;
+      process.env.SHELL = '/nonexistent/bash';
+      const fallback = fakeChild();
+      spawnMock.spawn.mockReturnValue(fallback as never);
+      const pendingFallback = bashTool({ command: 'echo hi' }, context());
+      await vi.waitFor(() => expect(spawnMock.spawn).toHaveBeenCalled());
+      const [fallbackExecutable, fallbackArgs] = spawnMock.spawn.mock.calls[0] as unknown as [string, string[]];
+      expect(fallbackExecutable).toBe('/bin/sh');
+      expect(fallbackArgs).toEqual(['-c', 'echo hi']);
+      fallback.emit('close', 0);
+      await pendingFallback;
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+      if (original.auraxisShell === undefined) delete process.env.AURAXIS_SHELL;
+      else process.env.AURAXIS_SHELL = original.auraxisShell;
+      if (original.shell === undefined) delete process.env.SHELL;
+      else process.env.SHELL = original.shell;
     }
   });
 });

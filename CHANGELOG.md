@@ -52,6 +52,9 @@ DeepSeek 官方接口同步 + Agent 执行视图重做。老配置无需修改�
 - 新增 `npm run lock:check`，校验 lockfile 是否覆盖所有可选依赖条目，
   并校验 peer 依赖范围是否有满足的已解析版本，同时接入 `npm run check`，
   避免再出现「本机装得上、CI 装不上」
+- Bash 工具的 shell 解析更稳：`$SHELL` 指向不存在或不可执行的路径时回退到
+  `/bin/sh`（最小容器镜像常见），不再直接 ENOENT；跨平台测试改为断言真实的
+  spawn 形态，修正了在 Linux CI 上必然失败、在 Windows 上被跳过的错误断言
 
 ### 说明
 
