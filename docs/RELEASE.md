@@ -15,7 +15,8 @@ npm run e2e:lsp
 npm run e2e:live
 ```
 
-确认无遗漏后创建 tag，例如 `v1.0.0`。Release workflow 会先在 Linux 上运行完整检查，再依次发布：
+确认无遗漏后创建 tag，例如 `v1.1.0`（tag 必须与 `package.json` 的版本号一致）。
+Release workflow 会先在 Linux 上运行完整检查，再依次发布：
 
 1. `@auraxis/core`
 2. `@auraxis/cli`

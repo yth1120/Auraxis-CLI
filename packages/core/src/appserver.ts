@@ -5,6 +5,7 @@ import { getTools } from './tools/registry.js';
 import { McpManager } from './mcp/manager.js';
 import { loadMcpServers } from './config.js';
 import { SessionStore } from './session/store.js';
+import { CORE_VERSION } from './version.js';
 import type {
   ApiFamily,
   ChatMessage,
@@ -134,7 +135,7 @@ export class AppServer {
         capabilities: {},
         serverInfo: {
           name: 'Auraxis App Server',
-          version: '1.0.0',
+          version: CORE_VERSION,
         },
       };
     }

@@ -1,4 +1,4 @@
-# Auraxis CLI v1.0.0
+# Auraxis CLI v1.1.0
 
 GitHub: [yth1120/Auraxis-CLI](https://github.com/yth1120/Auraxis-CLI)
 
