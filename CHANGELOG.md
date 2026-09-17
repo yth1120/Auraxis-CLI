@@ -46,8 +46,12 @@ DeepSeek 官方接口同步 + Agent 执行视图重做。老配置无需修改�
   npm 10 报 `Missing: esbuild@0.28.2 from lock file`，三平台 `npm ci` 全部失败。
   `npm run dev` / `npm start -w @auraxis/cli` 现在直接运行构建产物，
   新增 `npm run dev:watch -w @auraxis/cli` 使用 esbuild watch（依赖树少 504 个条目）
+- 项目自用的 esbuild 由 `^0.25.12` 升到 `^0.28.2`：`vite` 把 esbuild 声明为
+  peer 依赖且要求 `^0.27 || ^0.28`，原来 npm 会解析出第二份 esbuild，其平台包
+  没被写进 lock，正是 `npm ci` 失败的根因；现在全树只有一份 esbuild
 - 新增 `npm run lock:check`，校验 lockfile 是否覆盖所有可选依赖条目，
-  并把 `npm run check` 纳入该检查，避免再出现「本机装得上、CI 装不上」
+  并校验 peer 依赖范围是否有满足的已解析版本，同时接入 `npm run check`，
+  避免再出现「本机装得上、CI 装不上」
 
 ### 说明
 
