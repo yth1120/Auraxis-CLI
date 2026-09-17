@@ -167,16 +167,20 @@ describe('runtime config extras', () => {
       reasoningEffort: 'bad',
       toolChoice: 'bad',
       maxTokens: -5,
-      maxIterations: -1,
+      maxSteps: -1,
       contextBudget: '12000' as never,
     });
     expect(invalid.mode).toBe('ask');
     expect(invalid.sandboxMode).toBe('workspace-write');
     expect(invalid.reasoningEffort).toBe('high');
-    expect(invalid.toolChoice).toBe('auto');
-    expect(invalid.maxTokens).toBe(1);
-    expect(invalid.maxIterations).toBe(1);
-    expect(invalid.contextBudget).toBe(12_000);
+      expect(invalid.toolChoice).toBe('auto');
+      expect(invalid.maxTokens).toBe(1);
+      expect(invalid.maxSteps).toBe(-1);
+      expect(invalid.maxIterations).toBe(-1);
+      expect(invalid.contextBudget).toBe(12_000);
+
+      const legacy = await loadRuntimeConfig({ maxIterations: 25 });
+      expect(legacy.maxSteps).toBe(25);
 
     expect((await loadRuntimeConfig({ provider: 'gemini' })).apiBase).toContain('generativelanguage');
     expect((await loadRuntimeConfig({ provider: 'ollama' })).apiBase).toContain('11434');

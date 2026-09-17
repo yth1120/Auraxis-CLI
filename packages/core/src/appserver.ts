@@ -35,6 +35,8 @@ export interface AppServerOptions {
   visionDetail?: ImageDetail;
   strictTools?: boolean;
   maxTokens?: number;
+  maxSteps?: number;
+  /** @deprecated 使用 maxSteps。 */
   maxIterations?: number;
   contextBudget?: number;
   autoApprove?: boolean;
@@ -230,7 +232,7 @@ export class AppServer {
         mode: this.options.mode,
         sandboxMode: this.options.sandboxMode,
         maxTokens: this.options.maxTokens,
-        maxIterations: this.options.maxIterations,
+        maxSteps: this.options.maxSteps ?? this.options.maxIterations,
         contextBudget: this.options.contextBudget,
         reasoningEffort: this.options.reasoningEffort,
         toolChoice: this.options.toolChoice,

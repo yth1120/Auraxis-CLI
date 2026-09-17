@@ -201,6 +201,9 @@ export interface RunOptions {
   mode: ApprovalPolicy;
   sandboxMode: SandboxMode;
   maxTokens?: number;
+  /** 单次任务的工具轮次上限；0 或负数表示不设上限。 */
+  maxSteps?: number;
+  /** @deprecated 使用 maxSteps。 */
   maxIterations?: number;
   contextBudget?: number;
   reasoningEffort?: ReasoningEffort;
@@ -227,9 +230,11 @@ export interface RunResult {
   text: string;
   messages: ChatMessage[];
   iterations: number;
+  steps?: number;
   toolCallCount: number;
   plan?: Plan | null;
   aborted: boolean;
+  stopReason?: 'completed' | 'max_steps' | 'loop_detected' | 'aborted';
 }
 
 export interface SessionRecord {

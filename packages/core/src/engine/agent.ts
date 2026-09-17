@@ -81,6 +81,16 @@ function cleanFinal(text: string): string {
   return text.replace(/<FINAL_ANSWER>/gi, '').replace(/<\/FINAL_ANSWER>/gi, '').trim();
 }
 
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
+    .join(',')}}`;
+}
+
 function usageEvent(usage: { inputTokens: number; outputTokens: number; cacheHitTokens?: number; cacheMissTokens?: number; reasoningTokens?: number }): AgentEvent {
   return { type: 'usage', ...usage };
 }
@@ -334,15 +344,20 @@ const llm = options.llm || createLlmClient({
     }
   }
 
-  const maxIterations = options.maxIterations ?? 200;
-  let completedIterations = 0;
-  for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
+  const maxSteps = options.maxSteps ?? options.maxIterations ?? 500;
+  const unlimitedSteps = maxSteps <= 0;
+  let completedSteps = 0;
+  let loopDetected = false;
+  let repeatedBatchCount = 0;
+  let previousBatchFingerprint = '';
+  let previousBatchResultSignature = '';
+  for (let step = 1; unlimitedSteps || step <= maxSteps; step += 1) {
     if (options.signal?.aborted) {
       aborted = true;
       break;
     }
-    emit({ type: 'iteration_start', iteration });
-    completedIterations = iteration;
+    emit({ type: 'iteration_start', iteration: step });
+    completedSteps = step;
     messages = compactMessages(messages);
     if (!contextSummarized && estimateChatTokens(messages) > (options.contextBudget || 220_000)) {
       const summarized = await summarizeMessages(llm, messages, options.projectRoot, options.signal);
@@ -378,6 +393,10 @@ const llm = options.llm || createLlmClient({
     }
 
     const pendingHookContexts: string[] = [];
+    const toolMessageStart = messages.length;
+    const batchFingerprint = result.toolCalls
+      .map((call) => `${call.name}:${stableStringify(call.args)}`)
+      .join('|');
     for (const call of result.toolCalls) {
       if (options.signal?.aborted) {
         aborted = true;
@@ -506,16 +525,44 @@ const llm = options.llm || createLlmClient({
     if (pendingHookContexts.length > 0) {
       messages.push({ role: 'user', content: `[Hook 上下文]\n${pendingHookContexts.join('\n\n')}` });
     }
-    emit({ type: 'iteration_end', iteration });
+    if (!aborted) {
+      const batchResultSignature = messages
+        .slice(toolMessageStart)
+        .map((message) => `${message.name || ''}:${chatMessageText(message.content)}`)
+        .join('|')
+        .slice(0, 4000);
+      repeatedBatchCount =
+        batchFingerprint === previousBatchFingerprint && batchResultSignature === previousBatchResultSignature
+          ? repeatedBatchCount + 1
+          : 1;
+      previousBatchFingerprint = batchFingerprint;
+      previousBatchResultSignature = batchResultSignature;
+      if (repeatedBatchCount >= 3) {
+        loopDetected = true;
+        emit({
+          type: 'system_message',
+          level: 'warning',
+          content: '检测到重复工具调用且结果没有变化，已停止继续执行并准备收尾总结。',
+        });
+      }
+    }
+    emit({ type: 'iteration_end', iteration: step });
+    if (loopDetected) break;
   }
 
-  if (!text && !aborted && completedIterations >= maxIterations) {
+  const stepLimitReached = !unlimitedSteps && completedSteps >= maxSteps;
+  if (!text && !aborted && (stepLimitReached || loopDetected)) {
     const lastAssistant = [...messages].reverse().find((message) => message.role === 'assistant');
     const fallbackText = cleanFinal(chatMessageText(lastAssistant?.content));
+    const stopNotice = loopDetected
+      ? '检测到重复工具调用且结果没有变化，已停止继续执行。'
+      : `已达到工具轮次上限（${maxSteps}），已停止继续执行。`;
     emit({
       type: 'system_message',
       level: 'info',
-      content: '已达到最大工具轮次，正在生成收尾总结。',
+      content: loopDetected
+        ? '检测到重复执行，正在生成收尾总结。'
+        : '已达到最大工具轮次，正在生成收尾总结。',
     });
     try {
       const finalResponse = await llm.chat({
@@ -524,7 +571,9 @@ const llm = options.llm || createLlmClient({
           {
             role: 'user',
             content:
-              '已达到最大工具调用轮次。不要再调用任何工具。请根据当前上下文给出最终答复：说明已经完成的内容、验证过什么、还有什么未完成或需要注意。',
+              loopDetected
+                ? '检测到重复的无效执行。不要再调用任何工具。请根据当前上下文给出最终答复：说明已经完成的内容、验证过什么、为什么停止继续执行，以及还有什么未完成。'
+                : '已达到最大工具调用轮次。不要再调用任何工具。请根据当前上下文给出最终答复：说明已经完成的内容、验证过什么、还有什么未完成或需要注意。',
           },
         ],
         tools: [],
@@ -537,11 +586,11 @@ const llm = options.llm || createLlmClient({
         onThinkingChunk: (chunk, isNewBlock) => emit({ type: 'thinking_chunk', chunk, isNewBlock }),
         onUsage: (usage) => emit(usageEvent({ ...usage })),
       });
-      text = cleanFinal(finalResponse.content) || fallbackText;
+      text = cleanFinal(finalResponse.content) || fallbackText || stopNotice;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       emit({ type: 'system_message', level: 'warning', content: `收尾总结失败：${message}` });
-      text = fallbackText;
+      text = fallbackText || stopNotice;
     }
     if (text) {
       messages.push({ role: 'assistant', content: text });
@@ -552,9 +601,11 @@ const llm = options.llm || createLlmClient({
   return {
     text,
     messages,
-    iterations: completedIterations,
+    iterations: completedSteps,
+    steps: completedSteps,
     toolCallCount,
     plan: activePlan,
     aborted,
+    stopReason: aborted ? 'aborted' : loopDetected ? 'loop_detected' : stepLimitReached ? 'max_steps' : 'completed',
   };
 }

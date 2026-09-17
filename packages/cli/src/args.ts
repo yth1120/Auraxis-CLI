@@ -21,7 +21,7 @@ export interface CliOptions {
   theme?: string;
   reasoningEffort?: string;
   maxTokens?: number;
-  maxIterations?: number;
+  maxSteps?: number;
   contextBudget?: number;
   toolChoice?: string;
   json: boolean;
@@ -61,12 +61,20 @@ export function apiKeyEnvName(provider?: string): string {
   }
 }
 
+export function parseStepLimit(value?: string): number | undefined {
+  if (!value) return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (['unlimited', 'inf', 'infinite', '∞'].includes(normalized)) return -1;
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) return undefined;
+  return parsed <= 0 ? -1 : Math.max(1, Math.floor(parsed));
+}
+
 export function parseArgs(argv: string[]): CliOptions {
   const mode = valueOf(argv, '--mode') || valueOf(argv, '--permission-mode');
   const filesIndex = argv.indexOf('--files');
   const reasoningEffort = valueOf(argv, '--reasoning-effort');
-  const rawMax = valueOf(argv, '--max-iterations');
-  const maxIterations = rawMax ? Math.max(1, Math.floor(Number(rawMax))) : undefined;
+  const maxSteps = parseStepLimit(valueOf(argv, '--max-steps') ?? valueOf(argv, '--max-iterations'));
   const rawMaxTokens = valueOf(argv, '--max-tokens');
   const maxTokens = rawMaxTokens ? Math.max(1, Math.floor(Number(rawMaxTokens))) : undefined;
   const rawContextBudget = valueOf(argv, '--context-budget');
@@ -98,7 +106,7 @@ export function parseArgs(argv: string[]): CliOptions {
     theme: valueOf(argv, '--theme'),
     reasoningEffort,
     maxTokens: Number.isFinite(maxTokens) ? maxTokens : undefined,
-    maxIterations: Number.isFinite(maxIterations) ? maxIterations : undefined,
+    maxSteps,
     contextBudget: Number.isFinite(contextBudget) ? contextBudget : undefined,
     toolChoice: valueOf(argv, '--tool-choice'),
     json: has(argv, '--json'),
@@ -147,7 +155,8 @@ export function usage(): string {
     '  --reasoning-effort <low|high|max>',
     '  --tool-choice <auto|none|required>',
     '  --max-tokens <n>',
-    '  --max-iterations <n>',
+    '  --max-steps <n>           单次任务的工具轮次上限；0/-1 表示不设上限',
+    '  --max-iterations <n>      --max-steps 的兼容别名（已弃用）',
     '  --context-budget <n> 上下文 token 预算，超出后自动摘要',
     '  --session <id>            恢复会话',
     '  --resume / --continue <id>  --session 别名',

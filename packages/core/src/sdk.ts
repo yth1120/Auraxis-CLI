@@ -21,6 +21,8 @@ export interface AuraxisClientOptions {
   autoApprove?: boolean;
   approvePlan?: boolean;
   maxTokens?: number;
+  maxSteps?: number;
+  /** @deprecated 使用 maxSteps。 */
   maxIterations?: number;
   env?: NodeJS.ProcessEnv;
 }
@@ -65,7 +67,8 @@ export class AuraxisClient {
     if (options.autoApprove) args.push('--auto-approve');
     if (options.approvePlan) args.push('--approve-plan');
     if (options.maxTokens) args.push('--max-tokens', String(options.maxTokens));
-    if (options.maxIterations) args.push('--max-iterations', String(options.maxIterations));
+    const maxSteps = options.maxSteps ?? options.maxIterations;
+    if (maxSteps !== undefined) args.push('--max-steps', String(maxSteps));
     this.child = spawn(bin, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, ...(options.env || {}) },

@@ -15,6 +15,9 @@
     "dev": "npm run dev -w @auraxis/cli",
     "start": "npm run start -w @auraxis/cli",
     "cli": "npm run start -w @auraxis/cli --",
+    "prepare": "npm run build -w @auraxis/core",
+    "pretest": "npm run build -w @auraxis/core",
+    "pretypecheck": "npm run build -w @auraxis/core",
     "build": "npm run build -w @auraxis/core && npm run build -w @auraxis/cli",
     "build:native": "bun run scripts/build-binaries.mjs",
     "build:native:all": "bun run scripts/build-binaries.mjs --all",
@@ -37,7 +40,7 @@
     "check:native": "npm run build:native && npm run e2e:native",
     "check:integration": "npm run e2e:lsp && npm run e2e:live && npm run e2e:container",
     "check:all": "npm run check && npm run test:practical && npm run e2e:app-server && npm run e2e:sdk && npm run build:native:all && npm run e2e:native && npm run pack:check",
-    "check": "npm run version:check && npm run build -w @auraxis/core && npm run typecheck && npm run test && npm run coverage:gate && npm run build -w @auraxis/cli && npm run e2e && npm run e2e:bash && npm run e2e:code && npm run e2e:lsp && npm run e2e:container"
+    "check": "npm run version:check && npm run typecheck && npm run test && npm run coverage:gate && npm run build -w @auraxis/cli && npm run e2e && npm run e2e:bash && npm run e2e:code && npm run e2e:lsp && npm run e2e:container"
   },
   "devDependencies": {
     "@types/node": "^26.3.0",

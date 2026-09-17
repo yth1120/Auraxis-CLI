@@ -281,7 +281,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
       reasoningEffort: options.reasoningEffort,
       toolChoice: options.toolChoice,
       maxTokens: options.maxTokens,
-      maxIterations: options.maxIterations,
+      maxSteps: options.maxSteps,
       contextBudget: options.contextBudget,
       theme: options.theme,
     }).then((config) => {
@@ -298,7 +298,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
       setMaxTokens(config.maxTokens);
       if (config.theme) setTheme(config.theme as ThemeName);
     });
-  }, [options.project, options.model, options.provider, options.apiFamily, options.apiBase, options.mode, options.sandbox, options.visionDetail, options.strictTools, options.reasoningEffort, options.toolChoice, options.maxTokens, options.maxIterations, options.contextBudget, options.theme, options.session]);
+  }, [options.project, options.model, options.provider, options.apiFamily, options.apiBase, options.mode, options.sandbox, options.visionDetail, options.strictTools, options.reasoningEffort, options.toolChoice, options.maxTokens, options.maxSteps, options.contextBudget, options.theme, options.session]);
 
   useEffect(() => {
     if (!options.session) return;
@@ -1115,7 +1115,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
         reasoningEffort,
         toolChoice,
         maxTokens,
-        maxIterations: options.maxIterations,
+        maxSteps: options.maxSteps,
         contextBudget: options.contextBudget,
       });
       const paths = getAppPaths();
@@ -1232,7 +1232,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
           mode: config.mode,
           sandboxMode: config.sandboxMode,
           maxTokens: config.maxTokens,
-          maxIterations: config.maxIterations,
+          maxSteps: config.maxSteps,
           contextBudget: config.contextBudget,
           reasoningEffort: config.reasoningEffort,
           toolChoice: config.toolChoice,
@@ -1290,7 +1290,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
         reasoningEffort,
         toolChoice,
         maxTokens,
-        maxIterations: options.maxIterations,
+        maxSteps: options.maxSteps,
       });
       const paths = getAppPaths();
       const secret = new SecretStore(paths.credentialsFile, paths.keyFile);

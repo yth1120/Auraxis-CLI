@@ -43,7 +43,7 @@ class LoopingLlm implements LlmClient {
     return {
       content: '',
       reasoning: '',
-      toolCalls: [{ id: `call_${this.calls}`, name: 'ListFiles', args: {} }],
+      toolCalls: [{ id: `call_${this.calls}`, name: 'InspectRuntime', args: {} }],
     };
   }
 }
@@ -89,15 +89,44 @@ describe('runAgent', () => {
       tools: getTools(),
       llm,
       sessionId: 's-limit',
-      maxIterations: 2,
+      maxSteps: 2,
       onEvent: (event) => events.push(event.type),
     });
 
     expect(result.text).toBe('fallback summary');
     expect(result.iterations).toBe(2);
+    expect(result.steps).toBe(2);
+    expect(result.stopReason).toBe('max_steps');
     expect(result.toolCallCount).toBe(2);
     expect(llm.finalRequest?.toolChoice).toBe('none');
     expect(llm.finalRequest?.tools).toEqual([]);
+    expect(events).toContain('system_message');
+    expect(events).toContain('done');
+  });
+
+  it('stops repeated identical tool rounds with unchanged results', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'auraxis-agent-loop-'));
+    const llm = new LoopingLlm();
+    const events: string[] = [];
+    const result = await runAgent({
+      prompt: 'loop forever',
+      projectRoot: root,
+      model: 'deepseek-v4-flash',
+      apiKey: 'test',
+      apiBase: 'https://example.invalid',
+      mode: 'auto',
+      sandboxMode: 'workspace-write',
+      tools: getTools(),
+      llm,
+      sessionId: 's-loop',
+      maxSteps: 10,
+      onEvent: (event) => events.push(event.type),
+    });
+
+    expect(result.text).toBe('fallback summary');
+    expect(result.steps).toBe(3);
+    expect(result.toolCallCount).toBe(3);
+    expect(result.stopReason).toBe('loop_detected');
     expect(events).toContain('system_message');
     expect(events).toContain('done');
   });

@@ -22,5 +22,7 @@
 - 上下文摘要、长期记忆、沙箱策略、插件、HTTP MCP、跨会话消息与审计
 - 标准 LSP 客户端（UTF-8 `Content-Length` 帧协议、`AURAXIS_LSP_ARGS` 与
   `AURAXIS_LSP_INIT_OPTIONS`，可用 `AURAXIS_LSP_DEBUG=1` 排查启动问题）
+- Agent 执行保护：`maxSteps` 工具轮次预算、重复无进展检测，以及触发限制后的
+  无工具收尾总结
 
 后续桌面端如果复用该包，也不会反向影响 CLI 的独立性。

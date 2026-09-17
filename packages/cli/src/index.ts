@@ -80,6 +80,7 @@ async function doctor(): Promise<number> {
   console.log(`权限模式: ${config.mode}`);
   console.log(`沙箱: ${config.sandboxMode}`);
   console.log(`上下文预算: ${config.contextBudget}`);
+  console.log(`工具轮次上限: ${config.maxSteps < 0 ? 'unlimited' : config.maxSteps}`);
   console.log(`视觉精度: ${config.visionDetail}`);
   console.log(`Strict Tools: ${config.strictTools ? 'on' : 'off'}`);
   console.log(`工具数: ${getTools().length}`);
@@ -101,7 +102,7 @@ async function runAppServer(args: ReturnType<typeof parseArgs>): Promise<number>
     strictTools: args.strictTools,
     reasoningEffort: args.reasoningEffort,
     maxTokens: args.maxTokens,
-    maxIterations: args.maxIterations,
+    maxSteps: args.maxSteps,
     contextBudget: args.contextBudget,
     toolChoice: args.toolChoice,
   });
@@ -122,7 +123,7 @@ async function runAppServer(args: ReturnType<typeof parseArgs>): Promise<number>
     visionDetail: config.visionDetail,
     strictTools: config.strictTools,
     maxTokens: config.maxTokens,
-    maxIterations: config.maxIterations,
+    maxSteps: config.maxSteps,
     contextBudget: config.contextBudget,
     autoApprove: args.autoApprove,
     approvePlan: args.approvePlan,
@@ -159,7 +160,7 @@ async function runHeadless(args: ReturnType<typeof parseArgs>): Promise<number> 
     strictTools: args.strictTools,
     reasoningEffort: args.reasoningEffort,
     maxTokens: args.maxTokens,
-    maxIterations: args.maxIterations,
+    maxSteps: args.maxSteps ?? 200,
     contextBudget: args.contextBudget,
     toolChoice: args.toolChoice,
   });
@@ -231,7 +232,7 @@ async function runHeadless(args: ReturnType<typeof parseArgs>): Promise<number> 
       mode: config.mode,
       sandboxMode: config.sandboxMode,
       maxTokens: config.maxTokens,
-      maxIterations: config.maxIterations,
+      maxSteps: config.maxSteps,
       contextBudget: config.contextBudget,
       reasoningEffort: config.reasoningEffort,
       toolChoice: config.toolChoice,
@@ -283,7 +284,7 @@ async function runCodeHeadless(args: ReturnType<typeof parseArgs>): Promise<numb
     strictTools: args.strictTools,
     reasoningEffort: args.reasoningEffort,
     maxTokens: args.maxTokens,
-    maxIterations: args.maxIterations,
+    maxSteps: args.maxSteps ?? 200,
     toolChoice: args.toolChoice,
   });
   const codePath = path.resolve(config.projectRoot, args.code || '');

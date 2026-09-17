@@ -24,6 +24,14 @@ export const DEEPSEEK_API_ORIGIN = 'https://api.deepseek.com';
 export const DEFAULT_API_BASE = `${DEEPSEEK_API_ORIGIN}/beta/chat/completions`;
 export const DEFAULT_RESPONSES_API_BASE = `${DEEPSEEK_API_ORIGIN}/responses`;
 export const DEFAULT_DEEPSEEK_ANTHROPIC_API_BASE = `${DEEPSEEK_API_ORIGIN}/anthropic/v1/messages`;
+export const DEFAULT_MAX_STEPS = 500;
+
+function normalizeMaxSteps(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_MAX_STEPS;
+  if (parsed <= 0) return -1;
+  return Math.max(1, Math.floor(parsed));
+}
 
 export const BUILT_IN_MODELS = [
   { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', provider: 'deepseek', maxTokens: 384000, contextWindow: 1_000_000 },
@@ -90,6 +98,9 @@ export interface RuntimeConfig {
   visionDetail: ImageDetail;
   strictTools: boolean;
   maxTokens: number;
+  /** 单次任务的工具轮次上限；0 或负数表示不设上限。 */
+  maxSteps: number;
+  /** @deprecated 使用 maxSteps。 */
   maxIterations: number;
   contextBudget: number;
   toolChoice: ToolChoice;
@@ -110,6 +121,8 @@ export interface ConfigOverrides {
   theme?: string;
   reasoningEffort?: string;
   maxTokens?: number;
+  maxSteps?: number;
+  /** @deprecated 使用 maxSteps。 */
   maxIterations?: number;
   contextBudget?: number;
   toolChoice?: string;
@@ -339,7 +352,14 @@ export async function loadRuntimeConfig(overrides: ConfigOverrides = {}): Promis
     projectConfig.maxTokens ??
     globalConfig.maxTokens ??
     builtInModel?.maxTokens;
-  const maxIterationsValue = overrides.maxIterations ?? projectConfig.maxIterations ?? globalConfig.maxIterations;
+  const maxStepsValue =
+    overrides.maxSteps ??
+    overrides.maxIterations ??
+    projectConfig.maxSteps ??
+    projectConfig.maxIterations ??
+    globalConfig.maxSteps ??
+    globalConfig.maxIterations ??
+    process.env.AURAXIS_MAX_STEPS;
   const contextBudgetValue =
     overrides.contextBudget ??
     projectConfig.contextBudget ??
@@ -351,10 +371,7 @@ export async function loadRuntimeConfig(overrides: ConfigOverrides = {}): Promis
     typeof maxTokensValue === 'number' && Number.isFinite(maxTokensValue)
       ? Math.max(1, Math.floor(maxTokensValue))
       : 32768;
-  const maxIterations =
-    typeof maxIterationsValue === 'number' && Number.isFinite(maxIterationsValue)
-      ? Math.max(1, Math.floor(maxIterationsValue))
-      : 200;
+  const maxSteps = normalizeMaxSteps(maxStepsValue);
   const contextBudget =
     typeof contextBudgetValue === 'number' && Number.isFinite(contextBudgetValue)
       ? Math.max(1_000, Math.floor(contextBudgetValue))
@@ -396,7 +413,8 @@ export async function loadRuntimeConfig(overrides: ConfigOverrides = {}): Promis
         ? provider === 'deepseek' && apiFamily === 'chat'
         : toBoolean(strictToolsValue),
     maxTokens,
-    maxIterations,
+    maxSteps,
+    maxIterations: maxSteps,
     contextBudget,
     toolChoice: normalizeToolChoice(toolChoiceValue),
     apiKey:
