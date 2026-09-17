@@ -33,10 +33,22 @@ jobs:
         run: echo "tag=v$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")" >> "$GITHUB_OUTPUT"
       - name: Upload native binaries
         uses: softprops/action-gh-release@v2
+        # 该 action 在上传数百 MB 资产时偶发被 GitHub 返回 HTML 错误页，
+        # 失败不阻断后续的 gh CLI 兜底上传。
+        continue-on-error: true
         with:
           tag_name: ${{ steps.release_tag.outputs.tag }}
           files: packages/cli/native/*
           generate_release_notes: true
+          fail_on_unmatched_files: false
+      - name: Re-upload binaries with gh (robust overwrite)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ steps.release_tag.outputs.tag }}"
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --generate-notes
+          gh release upload "$tag" packages/cli/native/* --repo "$GITHUB_REPOSITORY" --clobber
       - name: Publish to npm (skipped without NPM_TOKEN)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
