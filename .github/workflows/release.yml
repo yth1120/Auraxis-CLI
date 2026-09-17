@@ -31,18 +31,14 @@ jobs:
         with:
           files: packages/cli/native/*
           generate_release_notes: true
-      - name: Publish @auraxis/core to npm
-        if: ${{ secrets.NPM_TOKEN != '' }}
-        run: npm publish -w @auraxis/core
+      - name: Publish to npm (skipped without NPM_TOKEN)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - name: Publish @auraxis/cli to npm
-        if: ${{ secrets.NPM_TOKEN != '' }}
-        run: npm publish -w @auraxis/cli
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - name: Note npm publish status
-        if: ${{ secrets.NPM_TOKEN == '' }}
         run: |
-          echo "::warning::NPM_TOKEN 未配置，已跳过 npm 发布；GitHub Release 与原生二进制已正常上传。"
-          echo "配置仓库 Secret NPM_TOKEN（npm Automation token）后重跑本 workflow 即可发布 npm 包。"
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::warning::NPM_TOKEN 未配置，已跳过 npm 发布；GitHub Release 与原生二进制已正常上传。"
+            echo "配置仓库 Secret NPM_TOKEN（npm Automation token）后重跑本 workflow 即可发布 npm 包。"
+            exit 0
+          fi
+          npm publish -w @auraxis/core
+          npm publish -w @auraxis/cli
