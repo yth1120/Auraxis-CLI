@@ -42,6 +42,12 @@ DeepSeek 官方接口同步 + Agent 执行视图重做。老配置无需修改�
 ### 修复
 
 - `models.ts` 内置模型回退清单不再映射不存在的 `experimental` 字段
+- 移除开发期 `tsx` 依赖：它在 lockfile 里嵌套了另一份 esbuild，导致 CI 的
+  npm 10 报 `Missing: esbuild@0.28.2 from lock file`，三平台 `npm ci` 全部失败。
+  `npm run dev` / `npm start -w @auraxis/cli` 现在直接运行构建产物，
+  新增 `npm run dev:watch -w @auraxis/cli` 使用 esbuild watch（依赖树少 504 个条目）
+- 新增 `npm run lock:check`，校验 lockfile 是否覆盖所有可选依赖条目，
+  并把 `npm run check` 纳入该检查，避免再出现「本机装得上、CI 装不上」
 
 ### 说明
 

@@ -19,8 +19,9 @@
     "access": "public"
   },
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "start": "tsx src/index.ts",
+    "dev": "node dist/main.js",
+    "start": "node dist/main.js",
+    "dev:watch": "node esbuild.mjs --watch",
     "build": "node esbuild.mjs",
     "build:single": "node esbuild.mjs --single",
     "typecheck": "tsc -p tsconfig.json --noEmit",

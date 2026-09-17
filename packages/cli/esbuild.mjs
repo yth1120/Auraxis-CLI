@@ -4,6 +4,7 @@ import path from 'node:path';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const single = process.argv.includes('--single');
+const watch = process.argv.includes('--watch');
 
 await build({
   entryPoints: [path.join(root, 'src', 'index.ts')],
@@ -22,4 +23,5 @@ await build({
     ? { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" }
     : undefined,
   logLevel: 'info',
+  ...(watch ? { watch: true } : {}),
 });
