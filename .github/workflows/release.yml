@@ -31,9 +31,22 @@ jobs:
       - name: Resolve release tag
         id: release_tag
         run: echo "tag=v$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")" >> "$GITHUB_OUTPUT"
-      # 用官方 gh CLI 上传：softprops/action-gh-release 传数百 MB 资产时会偶发
-      # 被 GitHub 返回 HTML 错误页或长期挂起。
+      # npm 发布放在资产上传之前：资产上传偶发被 GitHub 侧 500 拒绝，
+      # 不应因此让 npm 包发不出去。
+      - name: Publish to npm (skipped without NPM_TOKEN)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::warning::NPM_TOKEN 未配置，已跳过 npm 发布。"
+            echo "配置仓库 Secret NPM_TOKEN（npm Automation token）后重跑本 workflow 即可发布 npm 包。"
+            exit 0
+          fi
+          npm publish -w @auraxis/core
+          npm publish -w @auraxis/cli
+      # 用官方 gh CLI 上传，并对 GitHub 侧的瞬时 5xx 做重试。
       - name: Upload native binaries
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -43,15 +56,14 @@ jobs:
           else
             gh release create "$tag" --repo "$GITHUB_REPOSITORY" --title "$tag" --generate-notes
           fi
-          gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber packages/cli/native/*
-      - name: Publish to npm (skipped without NPM_TOKEN)
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          if [ -z "$NODE_AUTH_TOKEN" ]; then
-            echo "::warning::NPM_TOKEN 未配置，已跳过 npm 发布；GitHub Release 与原生二进制已正常上传。"
-            echo "配置仓库 Secret NPM_TOKEN（npm Automation token）后重跑本 workflow 即可发布 npm 包。"
-            exit 0
-          fi
-          npm publish -w @auraxis/core
-          npm publish -w @auraxis/cli
+          for attempt in 1 2 3; do
+            echo "第 $attempt 次上传资产…"
+            if gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber packages/cli/native/*; then
+              echo "资产上传完成"
+              exit 0
+            fi
+            echo "::warning::第 $attempt 次上传失败，30 秒后重试"
+            sleep 30
+          done
+          echo "::error::资产上传连续失败，请稍后重跑本 workflow 补传"
+          exit 1
