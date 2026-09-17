@@ -15,6 +15,19 @@ if (dockerCheck.status !== 0) {
   process.exit(0);
 }
 
+// Windows 上的 Docker 默认跑 Windows 容器，拉不到 node:24-alpine 这类 Linux 镜像
+// （"no matching manifest for windows/amd64"），这里先探测一次避免 CI 误报失败。
+if (process.platform === 'win32') {
+  const probe = spawnSync('docker', ['pull', '--quiet', 'node:24-alpine'], {
+    stdio: 'ignore',
+    timeout: 120_000,
+  });
+  if (probe.status !== 0) {
+    console.log('container e2e skipped: Windows runner cannot run linux containers');
+    process.exit(0);
+  }
+}
+
 const program = [
   'const out = await tools.Bash({ command: "printf container-ok" });',
   'console.log(String(out).includes("container-ok") ? "container-tools-ok" : "container-tools-failed");',
