@@ -7,7 +7,7 @@ import { getTool, type ToolContext } from '../tools/registry.js';
 import { PermissionGate } from './permissions.js';
 import { generatePlan } from './planner.js';
 import { scanSkills, readSkillContent, type SkillRecord } from '../skills.js';
-import type { ChatMessage, ChatContentPart, Plan, PlanDecision, RunOptions, RunResult, ToolDefinition } from '../types.js';
+import { chatMessageText, type ChatMessage, type ChatContentPart, type Plan, type PlanDecision, type RunOptions, type RunResult, type ToolDefinition } from '../types.js';
 import { modelSupportsImages, type JsonObject } from '../types.js';
 import { getAppPaths } from '../config.js';
 import { UndoStore } from '../undo.js';
@@ -507,6 +507,46 @@ const llm = options.llm || createLlmClient({
       messages.push({ role: 'user', content: `[Hook 上下文]\n${pendingHookContexts.join('\n\n')}` });
     }
     emit({ type: 'iteration_end', iteration });
+  }
+
+  if (!text && !aborted && completedIterations >= maxIterations) {
+    const lastAssistant = [...messages].reverse().find((message) => message.role === 'assistant');
+    const fallbackText = cleanFinal(chatMessageText(lastAssistant?.content));
+    emit({
+      type: 'system_message',
+      level: 'info',
+      content: '已达到最大工具轮次，正在生成收尾总结。',
+    });
+    try {
+      const finalResponse = await llm.chat({
+        messages: [
+          ...messages,
+          {
+            role: 'user',
+            content:
+              '已达到最大工具调用轮次。不要再调用任何工具。请根据当前上下文给出最终答复：说明已经完成的内容、验证过什么、还有什么未完成或需要注意。',
+          },
+        ],
+        tools: [],
+        toolChoice: 'none',
+        stream: true,
+        reasoningEffort: options.reasoningEffort || 'high',
+        maxTokens: Math.min(options.maxTokens ?? 32768, 4096),
+        signal: options.signal,
+        onTextChunk: (chunk) => emit({ type: 'text_chunk', text: chunk }),
+        onThinkingChunk: (chunk, isNewBlock) => emit({ type: 'thinking_chunk', chunk, isNewBlock }),
+        onUsage: (usage) => emit(usageEvent({ ...usage })),
+      });
+      text = cleanFinal(finalResponse.content) || fallbackText;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      emit({ type: 'system_message', level: 'warning', content: `收尾总结失败：${message}` });
+      text = fallbackText;
+    }
+    if (text) {
+      messages.push({ role: 'assistant', content: text });
+      emit({ type: 'done', result: text });
+    }
   }
 
   return {

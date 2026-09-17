@@ -30,6 +30,24 @@ class FakeLlm implements LlmClient {
   }
 }
 
+class LoopingLlm implements LlmClient {
+  calls = 0;
+  finalRequest?: LlmRequest;
+
+  async chat(request: LlmRequest): Promise<LlmResult> {
+    this.calls += 1;
+    if (request.toolChoice === 'none' || request.tools?.length === 0) {
+      this.finalRequest = request;
+      return { content: '<FINAL_ANSWER>fallback summary', reasoning: '', toolCalls: [] };
+    }
+    return {
+      content: '',
+      reasoning: '',
+      toolCalls: [{ id: `call_${this.calls}`, name: 'ListFiles', args: {} }],
+    };
+  }
+}
+
 describe('runAgent', () => {
   it('executes tools and finishes with assistant text', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'auraxis-agent-'));
@@ -54,6 +72,34 @@ describe('runAgent', () => {
     expect(await fs.readFile(path.join(root, 'out.txt'), 'utf8')).toBe('hello from agent');
     expect(events).toContain('tool_start');
     expect(events).toContain('tool_end');
+  });
+
+  it('forces a final summary when the tool iteration budget is exhausted', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'auraxis-agent-limit-'));
+    const llm = new LoopingLlm();
+    const events: string[] = [];
+    const result = await runAgent({
+      prompt: 'keep working',
+      projectRoot: root,
+      model: 'deepseek-v4-flash',
+      apiKey: 'test',
+      apiBase: 'https://example.invalid',
+      mode: 'auto',
+      sandboxMode: 'workspace-write',
+      tools: getTools(),
+      llm,
+      sessionId: 's-limit',
+      maxIterations: 2,
+      onEvent: (event) => events.push(event.type),
+    });
+
+    expect(result.text).toBe('fallback summary');
+    expect(result.iterations).toBe(2);
+    expect(result.toolCallCount).toBe(2);
+    expect(llm.finalRequest?.toolChoice).toBe('none');
+    expect(llm.finalRequest?.tools).toEqual([]);
+    expect(events).toContain('system_message');
+    expect(events).toContain('done');
   });
 
   it('returns denied permission without executing a risky tool', async () => {

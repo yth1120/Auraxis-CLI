@@ -73,3 +73,6 @@
 - CI 和 Release 增加 practical matrix、App Server、SDK 与 npm 打包检查。
 - 修复 LSP 客户端按字符串长度解析 UTF-8 帧的问题；包含中文/非 ASCII 路径的
   项目现在可以正常使用定义与引用查询，且显式 `AURAXIS_LSP_ARGS` 不再经过 shell。
+- Agent 达到最大工具轮次时不再返回空文本：会强制发起一次禁用工具的收尾总结，
+  输出完成情况、验证结果与未完成事项。
+- CLI 本地入口会比较 `main.js` 与 `single.js` 的构建时间，避免运行到过期 bundle。
