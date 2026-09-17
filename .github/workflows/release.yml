@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+  # 允许手动补发：按 package.json 的当前版本创建或更新对应的 Release。
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -26,9 +28,13 @@ jobs:
       - run: npm run build:single -w @auraxis/cli
       - run: npm run pack:check
       - run: npm run build:native:all
+      - name: Resolve release tag
+        id: release_tag
+        run: echo "tag=v$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")" >> "$GITHUB_OUTPUT"
       - name: Upload native binaries
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.release_tag.outputs.tag }}
           files: packages/cli/native/*
           generate_release_notes: true
       - name: Publish to npm (skipped without NPM_TOKEN)
