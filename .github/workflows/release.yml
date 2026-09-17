@@ -26,14 +26,23 @@ jobs:
       - run: npm run build:single -w @auraxis/cli
       - run: npm run pack:check
       - run: npm run build:native:all
-      - run: npm publish -w @auraxis/core
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - run: npm publish -w @auraxis/cli
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Upload native binaries
         uses: softprops/action-gh-release@v2
         with:
           files: packages/cli/native/*
           generate_release_notes: true
+      - name: Publish @auraxis/core to npm
+        if: ${{ secrets.NPM_TOKEN != '' }}
+        run: npm publish -w @auraxis/core
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish @auraxis/cli to npm
+        if: ${{ secrets.NPM_TOKEN != '' }}
+        run: npm publish -w @auraxis/cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Note npm publish status
+        if: ${{ secrets.NPM_TOKEN == '' }}
+        run: |
+          echo "::warning::NPM_TOKEN 未配置，已跳过 npm 发布；GitHub Release 与原生二进制已正常上传。"
+          echo "配置仓库 Secret NPM_TOKEN（npm Automation token）后重跑本 workflow 即可发布 npm 包。"
