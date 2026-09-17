@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { formatPlan, mouseScrollDelta, sessionToUiItems } from '../ui/terminal-model.js';
+import {
+  appendPendingPrompt,
+  formatPlan,
+  mouseScrollDelta,
+  sessionToUiItems,
+  takeNextPendingPrompt,
+  withdrawPendingPrompt,
+} from '../ui/terminal-model.js';
 
 describe('terminal model helpers', () => {
   it('renders plans and converts sessions to UI items', () => {
@@ -23,5 +30,14 @@ describe('terminal model helpers', () => {
     expect(mouseScrollDelta('\x1b[<64;1;1M')).toBe(3);
     expect(mouseScrollDelta('\x1b[<65;1;1M')).toBe(-3);
     expect(mouseScrollDelta('\x1b[<0;1;1M input')).toBe(0);
+  });
+
+  it('keeps queued prompts ordered and withdrawable', () => {
+    const queued = appendPendingPrompt(appendPendingPrompt([], 'first'), 'second');
+    expect(queued).toEqual(['first', 'second']);
+    expect(takeNextPendingPrompt(queued)).toEqual({ next: 'first', rest: ['second'] });
+    expect(withdrawPendingPrompt(queued)).toEqual({ withdrawn: 'second', rest: ['first'] });
+    expect(takeNextPendingPrompt([])).toEqual({ rest: [] });
+    expect(withdrawPendingPrompt([])).toEqual({ rest: [] });
   });
 });

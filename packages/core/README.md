@@ -20,6 +20,7 @@
 - 权限门与计划审批接口
 - 会话持久化
 - 上下文摘要、长期记忆、沙箱策略、插件、HTTP MCP、跨会话消息与审计
-- 标准 LSP 客户端（`Content-Length` 帧协议、`AURAXIS_LSP_INIT_OPTIONS`）
+- 标准 LSP 客户端（UTF-8 `Content-Length` 帧协议、`AURAXIS_LSP_ARGS` 与
+  `AURAXIS_LSP_INIT_OPTIONS`，可用 `AURAXIS_LSP_DEBUG=1` 排查启动问题）
 
 后续桌面端如果复用该包，也不会反向影响 CLI 的独立性。

@@ -60,14 +60,17 @@ import {
   type ToolContext,
   type ToolChoice,
 } from '@auraxis/core';
-import type { CliOptions } from '../args.js';
+import { apiKeyEnvName, type CliOptions } from '../args.js';
 import type { ThemeName } from './blocks.js';
 import { matchCommandHints, resolveCommandAlias, resolveSuggestedCommand, type CommandHint } from './commands.js';
 import { HOME_COMMANDS, formatSessionTime } from './home.js';
 import {
+  appendPendingPrompt,
   formatPlan,
   mouseScrollDelta,
   sessionToUiItems,
+  takeNextPendingPrompt,
+  withdrawPendingPrompt as popPendingPrompt,
   type ActiveCommand,
   type ActivityItem,
   type ChoiceOption,
@@ -208,6 +211,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
   const mcpRef = useRef<McpManager | null>(null);
   const pendingPromptsRef = useRef<string[]>([]);
   const startingPendingRef = useRef(false);
+  const runPromptRef = useRef<(text: string) => Promise<void>>(async () => {});
   const historyLoadedRef = useRef(false);
   const activitySeqRef = useRef(0);
   const activityToolIdsRef = useRef<Map<string, string[]>>(new Map());
@@ -391,17 +395,26 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
 
   const enqueuePrompt = useCallback(
     (text: string) => {
-      setPendingQueue([...pendingPromptsRef.current, text]);
+      setPendingQueue(appendPendingPrompt(pendingPromptsRef.current, text));
     },
     [setPendingQueue],
   );
 
-  const withdrawPendingPrompt = useCallback(() => {
-    const next = [...pendingPromptsRef.current];
-    const withdrawn = next.pop();
+  const withdrawLastPending = useCallback(() => {
+    const { withdrawn, rest } = popPendingPrompt(pendingPromptsRef.current);
     if (!withdrawn) return null;
-    setPendingQueue(next);
+    setPendingQueue(rest);
     return withdrawn;
+  }, [setPendingQueue]);
+
+  const finishRun = useCallback(() => {
+    setRunning(false);
+    startingPendingRef.current = false;
+    controllerRef.current = null;
+    const { next, rest } = takeNextPendingPrompt(pendingPromptsRef.current);
+    if (!next) return;
+    setPendingQueue(rest);
+    void runPromptRef.current(next);
   }, [setPendingQueue]);
 
   const saveOnboardingApiKey = useCallback(async (apiKey: string) => {
@@ -450,17 +463,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
       const secret = new SecretStore(paths.credentialsFile, paths.keyFile);
       const storedKey =
         (await secret.get('AURAXIS_API_KEY').catch(() => undefined)) ||
-        (await secret.get(
-          config.provider === 'anthropic'
-            ? 'ANTHROPIC_API_KEY'
-            : config.provider === 'gemini'
-              ? 'GEMINI_API_KEY'
-              : config.provider === 'openai'
-                ? 'OPENAI_API_KEY'
-                : config.provider === 'ollama'
-                  ? 'OLLAMA_API_KEY'
-                  : 'DEEPSEEK_API_KEY',
-        ).catch(() => undefined));
+        (await secret.get(apiKeyEnvName(config.provider)).catch(() => undefined));
       const apiKey = config.apiKey || storedKey || '';
       const result = await resolveModelChoices(apiKey, config.apiBase, undefined, config.provider);
       if (requestId !== modelPickerRequestRef.current) return;
@@ -1096,9 +1099,8 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
     [addItem, appendAssistant, appendThinking, appendTool, updateActivity],
   );
 
-  const runPrompt = useCallback(
+  const executePrompt = useCallback(
     async (promptText: string) => {
-      setRunning(true);
       const config = await loadRuntimeConfig({
         project: options.project,
         model,
@@ -1118,12 +1120,19 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
       });
       const paths = getAppPaths();
       const secret = new SecretStore(paths.credentialsFile, paths.keyFile);
-      const storedKey =
-        (await secret.get('AURAXIS_API_KEY').catch(() => undefined)) ||
-        (await secret.get('DEEPSEEK_API_KEY').catch(() => undefined)) ||
-        (await secret.get('ANTHROPIC_API_KEY').catch(() => undefined)) ||
-        (await secret.get('GEMINI_API_KEY').catch(() => undefined)) ||
-        (await secret.get('OPENAI_API_KEY').catch(() => undefined));
+      const storedKey = (
+        await Promise.all(
+          [
+            apiKeyEnvName(config.provider),
+            'AURAXIS_API_KEY',
+            'DEEPSEEK_API_KEY',
+            'ANTHROPIC_API_KEY',
+            'GEMINI_API_KEY',
+            'OPENAI_API_KEY',
+            'OLLAMA_API_KEY',
+          ].map((name) => secret.get(name).catch(() => undefined)),
+        )
+      ).find(Boolean);
       const apiKey = config.apiKey || storedKey || '';
       if (!apiKey) {
         addItem({ kind: 'error', text: '未配置 API Key，请设置对应供应商的环境变量或使用 /api-key 保存。' });
@@ -1244,23 +1253,29 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
         if (result.aborted) addItem({ kind: 'system', text: '任务已取消' });
       } catch (error) {
         addItem({ kind: 'error', text: error instanceof Error ? error.message : String(error) });
-      } finally {
-        setRunning(false);
-        controllerRef.current = null;
-        const next = pendingPromptsRef.current[0];
-        if (next) {
-          pendingPromptsRef.current = pendingPromptsRef.current.slice(1);
-          setPendingPrompts(pendingPromptsRef.current);
-          void runPrompt(next);
-        }
       }
     },
     [addItem, appendAssistant, handleEvent, model, provider, apiFamily, mode, options, sandbox, saveSession, visionDetail, strictTools, reasoningEffort, toolChoice, apiBase, maxTokens],
   );
 
-  const runCodeFile = useCallback(
-    async (fileArg: string) => {
+  const runPrompt = useCallback(
+    async (promptText: string) => {
+      startingPendingRef.current = true;
       setRunning(true);
+      try {
+        await executePrompt(promptText);
+      } catch (error) {
+        addItem({ kind: 'error', text: error instanceof Error ? error.message : String(error) });
+      } finally {
+        finishRun();
+      }
+    },
+    [addItem, executePrompt, finishRun],
+  );
+  runPromptRef.current = runPrompt;
+
+  const executeCodeFile = useCallback(
+    async (fileArg: string) => {
       const config = await loadRuntimeConfig({
         project: options.project,
         model,
@@ -1490,18 +1505,25 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
       } catch (error) {
         addItem({ kind: 'error', text: error instanceof Error ? error.message : String(error) });
       } finally {
-        setRunning(false);
-        controllerRef.current = null;
-        const next = pendingPromptsRef.current[0];
-        if (next) {
-          pendingPromptsRef.current = pendingPromptsRef.current.slice(1);
-          setPendingPrompts(pendingPromptsRef.current);
-          void runPrompt(next);
-        }
         await codeLsp?.close().catch(() => {});
       }
     },
-    [addItem, apiBase, apiFamily, maxTokens, model, options, projectFull, provider, reasoningEffort, runPrompt, sandbox, strictTools, toolChoice, updateActivity, visionDetail],
+    [addItem, apiBase, apiFamily, maxTokens, model, options, projectFull, provider, reasoningEffort, sandbox, strictTools, toolChoice, updateActivity, visionDetail],
+  );
+
+  const runCodeFile = useCallback(
+    async (fileArg: string) => {
+      startingPendingRef.current = true;
+      setRunning(true);
+      try {
+        await executeCodeFile(fileArg);
+      } catch (error) {
+        addItem({ kind: 'error', text: error instanceof Error ? error.message : String(error) });
+      } finally {
+        finishRun();
+      }
+    },
+    [addItem, executeCodeFile, finishRun],
   );
 
   const submit = useCallback((valueOverride?: string) => {
@@ -1552,16 +1574,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
         void (async () => {
           const paths = getAppPaths();
           const store = new SecretStore(paths.credentialsFile, paths.keyFile);
-          const keyName =
-            provider === 'anthropic'
-              ? 'ANTHROPIC_API_KEY'
-              : provider === 'gemini'
-                ? 'GEMINI_API_KEY'
-                : provider === 'openai'
-                  ? 'OPENAI_API_KEY'
-                  : provider === 'ollama'
-                    ? 'OLLAMA_API_KEY'
-                    : 'DEEPSEEK_API_KEY';
+          const keyName = apiKeyEnvName(provider);
           await store.set(keyName, value);
         })();
       } else if (command.key === 'symbol') {
@@ -1593,7 +1606,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
     if (!value) return;
     setHistory((prev) => (prev[prev.length - 1] === value ? prev : [...prev, value].slice(-100)));
     setHistoryIndex(null);
-    if (running) {
+    if (running || startingPendingRef.current) {
       if (value.startsWith('/')) {
         addItem({ kind: 'system', text: '运行中暂不支持排队命令，请等待当前任务结束。' });
         return;
@@ -1998,16 +2011,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
           void (async () => {
             const paths = getAppPaths();
             const store = new SecretStore(paths.credentialsFile, paths.keyFile);
-            const keyName =
-              provider === 'anthropic'
-                ? 'ANTHROPIC_API_KEY'
-                : provider === 'gemini'
-                  ? 'GEMINI_API_KEY'
-                  : provider === 'openai'
-                    ? 'OPENAI_API_KEY'
-                    : provider === 'ollama'
-                      ? 'OLLAMA_API_KEY'
-                      : 'DEEPSEEK_API_KEY';
+            const keyName = apiKeyEnvName(provider);
             await store.set(keyName, body);
             addItem({ kind: 'system', text: `${keyName} 已加密保存` });
           })();
@@ -2312,7 +2316,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
       return;
     }
     if (key.ctrl && keyInput.toLowerCase() === 'z') {
-      const withdrawn = withdrawPendingPrompt();
+      const withdrawn = withdrawLastPending();
       if (withdrawn) {
         addItem({ kind: 'system', text: `已撤回等待任务：${withdrawn.slice(0, 80)}` });
       }

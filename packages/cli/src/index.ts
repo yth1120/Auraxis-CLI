@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { parseArgs, usage } from './args.js';
+import { apiKeyEnvName, parseArgs, usage } from './args.js';
 import { CLI_VERSION } from './version.js';
 import { loadRuntimeConfig, getAppPaths, type RuntimeConfig, AppServer } from '@auraxis/core';
 import {
@@ -37,18 +37,7 @@ async function resolveApiKey(config: RuntimeConfig): Promise<string> {
   if (config.apiKey) return config.apiKey;
   const paths = getAppPaths();
   const store = new SecretStore(paths.credentialsFile, paths.keyFile);
-  const names = [
-    'AURAXIS_API_KEY',
-    config.provider === 'anthropic'
-      ? 'ANTHROPIC_API_KEY'
-      : config.provider === 'gemini'
-        ? 'GEMINI_API_KEY'
-        : config.provider === 'openai'
-          ? 'OPENAI_API_KEY'
-          : config.provider === 'ollama'
-            ? 'OLLAMA_API_KEY'
-            : 'DEEPSEEK_API_KEY',
-  ];
+  const names = ['AURAXIS_API_KEY', apiKeyEnvName(config.provider)];
   for (const name of names) {
     const stored = await store.get(name).catch(() => undefined);
     if (stored) return stored;
@@ -518,8 +507,9 @@ async function main(): Promise<void> {
   if (args.setApiKey) {
     const paths = getAppPaths();
     const store = new SecretStore(paths.credentialsFile, paths.keyFile);
-    await store.set('DEEPSEEK_API_KEY', args.setApiKey);
-    console.log('API Key 已加密保存');
+    const keyName = apiKeyEnvName(args.provider);
+    await store.set(keyName, args.setApiKey);
+    console.log(`${keyName} 已加密保存`);
     process.exitCode = 0;
     return;
   }

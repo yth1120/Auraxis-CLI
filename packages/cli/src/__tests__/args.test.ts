@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseArgs } from '../args.js';
+import { apiKeyEnvName, parseArgs, usage } from '../args.js';
 
 describe('parseArgs', () => {
   it('parses common flags', () => {
@@ -36,5 +36,21 @@ describe('parseArgs', () => {
   it('parses --code-file and --code aliases', () => {
     expect(parseArgs(['--code-file', 'main.ts']).code).toBe('main.ts');
     expect(parseArgs(['--code=main.ts']).code).toBe('main.ts');
+  });
+
+  it('maps each provider to its credential name', () => {
+    expect(apiKeyEnvName()).toBe('DEEPSEEK_API_KEY');
+    expect(apiKeyEnvName('deepseek')).toBe('DEEPSEEK_API_KEY');
+    expect(apiKeyEnvName('openai')).toBe('OPENAI_API_KEY');
+    expect(apiKeyEnvName('anthropic')).toBe('ANTHROPIC_API_KEY');
+    expect(apiKeyEnvName('gemini')).toBe('GEMINI_API_KEY');
+    expect(apiKeyEnvName('ollama')).toBe('OLLAMA_API_KEY');
+  });
+
+  it('keeps documented aliases in the help output', () => {
+    const help = usage();
+    for (const flag of ['--cwd', '--permission-mode', '--resume', '--auto', '--no-home', '--no-color']) {
+      expect(help).toContain(flag);
+    }
   });
 });

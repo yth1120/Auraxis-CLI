@@ -66,3 +66,10 @@
   沙箱在只读模式下显式拒绝命令执行，并拦截管道给 shell、eval、关机/格式化等危险命令。
 - UI 拆分为 terminal-model / wizard / terminal-controller / app 四层，状态、按键事件
   和渲染视图分离，避免单文件继续膨胀。
+- `--set-api-key` 现在按当前 provider 保存到对应的 `*_API_KEY`，修复此前
+  Anthropic / OpenAI / Gemini / Ollama 密钥被误存为 DeepSeek 的问题。
+- 排队任务统一经过执行生命周期清理；即使缺少 API Key、配置文件损坏或 Code Mode
+  文件读取失败，也不会卡在“运行中”状态，队列会继续执行下一条。
+- CI 和 Release 增加 practical matrix、App Server、SDK 与 npm 打包检查。
+- 修复 LSP 客户端按字符串长度解析 UTF-8 帧的问题；包含中文/非 ASCII 路径的
+  项目现在可以正常使用定义与引用查询，且显式 `AURAXIS_LSP_ARGS` 不再经过 shell。

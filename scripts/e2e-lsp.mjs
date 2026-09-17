@@ -47,7 +47,6 @@ const program = [
 ].join('\n');
 await fs.writeFile(path.join(workDir, 'program.ts'), program, 'utf8');
 
-const lspCommand = `${JSON.stringify(process.execPath)} ${JSON.stringify(lspCli)} --stdio`;
 const child = spawn(
   process.execPath,
   [
@@ -66,7 +65,8 @@ const child = spawn(
       ...process.env,
       AURAXIS_HOME: path.join(workDir, 'auraxis-data'),
       AURAXIS_ALLOW_UNSAFE_CODE: '1',
-      AURAXIS_LSP_COMMAND: lspCommand,
+      AURAXIS_LSP_COMMAND: process.execPath,
+      AURAXIS_LSP_ARGS: JSON.stringify([lspCli, '--stdio']),
       AURAXIS_LSP_INIT_OPTIONS: JSON.stringify({
         tsserver: {
           path: path.join(projectRoot, 'node_modules', 'typescript5', 'lib', 'tsserver.js'),

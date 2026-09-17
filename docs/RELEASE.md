@@ -5,6 +5,9 @@
 ```bash
 npm run version:check
 npm run check
+npm run test:practical
+npm run e2e:app-server
+npm run e2e:sdk
 npm run pack:check
 npm run build:native
 npm run e2e:native

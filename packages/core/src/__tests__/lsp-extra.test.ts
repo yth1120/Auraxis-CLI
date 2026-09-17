@@ -32,6 +32,11 @@ function frameError(id: number, message: string): Buffer {
   return Buffer.from(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
 }
 
+function notificationFrame(method: string, params: unknown): Buffer {
+  const body = JSON.stringify({ jsonrpc: '2.0', method, params });
+  return Buffer.from(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
+}
+
 function parseFrame(data: string): { id?: number; method?: string } {
   const bodyStart = data.indexOf('\r\n\r\n') + 4;
   return data.startsWith('Content-Length:') ? JSON.parse(data.slice(bodyStart)) : JSON.parse(data);
@@ -107,6 +112,31 @@ describe('LSP manager runtime', () => {
     const manager = await LspManager.fromEnv(process.cwd());
     expect(manager).not.toBeNull();
     await expect(manager!.definition('/tmp/a.ts', 1, 1)).rejects.toThrow('not found');
+    await manager!.close();
+  });
+
+  it('parses UTF-8 frames when notifications contain non-ASCII text', async () => {
+    spawnMock.spawn.mockImplementation(() => {
+      const child = fakeChild();
+      child.stdin.write = (data: string) => {
+        const message = parseFrame(data);
+        if (message.id && message.method === 'initialize') {
+          queueMicrotask(() => {
+            child.stdout.emit(
+              'data',
+              notificationFrame('window/logMessage', {
+                message: `当前项目路径包含中文：${'测试目录/'.repeat(40)}`,
+              }),
+            );
+            child.stdout.emit('data', frame(message.id!));
+          });
+        }
+      };
+      return child;
+    });
+    process.env.AURAXIS_LSP_COMMAND = 'fake-lsp';
+    const manager = await LspManager.fromEnv(process.cwd());
+    expect(manager).not.toBeNull();
     await manager!.close();
   });
 

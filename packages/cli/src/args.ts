@@ -46,6 +46,21 @@ function has(argv: string[], flag: string): boolean {
   return argv.includes(flag);
 }
 
+export function apiKeyEnvName(provider?: string): string {
+  switch ((provider || 'deepseek').toLowerCase()) {
+    case 'anthropic':
+      return 'ANTHROPIC_API_KEY';
+    case 'gemini':
+      return 'GEMINI_API_KEY';
+    case 'openai':
+      return 'OPENAI_API_KEY';
+    case 'ollama':
+      return 'OLLAMA_API_KEY';
+    default:
+      return 'DEEPSEEK_API_KEY';
+  }
+}
+
 export function parseArgs(argv: string[]): CliOptions {
   const mode = valueOf(argv, '--mode') || valueOf(argv, '--permission-mode');
   const filesIndex = argv.indexOf('--files');
@@ -115,6 +130,7 @@ export function usage(): string {
     '',
     '选项:',
     '  --project <dir>           项目目录',
+    '  --cwd <dir>               --project 别名',
     '  --model <id>              模型 ID',
     '  --provider <provider>     模型供应商（deepseek|openai|anthropic|gemini|ollama|custom）',
     '  --api-family <chat|responses|anthropic>   DeepSeek 接口协议',
@@ -122,6 +138,7 @@ export function usage(): string {
     '  --set-api-key <key>       加密保存当前供应商 API Key',
     '  --api-base <url>          API 地址',
     '  --mode <ask|plan|auto>    审批策略',
+    '  --permission-mode <mode>  --mode 别名',
     '  --sandbox <read|workspace-write|full|container>  沙箱策略',
     '  --vision-detail <low|high|original|auto> 图片处理精度',
     '  --strict-tools            启用 strict Function Calling',
@@ -133,10 +150,14 @@ export function usage(): string {
     '  --max-iterations <n>',
     '  --context-budget <n> 上下文 token 预算，超出后自动摘要',
     '  --session <id>            恢复会话',
+    '  --resume / --continue <id>  --session 别名',
     '  --auto-approve            自动批准工具调用',
+    '  --auto                    --auto-approve 别名',
     '  --approve-plan            自动批准计划',
     '  --json                    输出 NDJSON',
     '  --no-banner               跳过启动卡片',
+    '  --no-home                 --no-banner 别名',
+    '  --no-color                禁用彩色输出',
     '  --help / --version',
   ].join('\n');
 }

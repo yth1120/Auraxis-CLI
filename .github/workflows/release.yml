@@ -20,7 +20,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+      - run: npm run test:practical
+      - run: npm run e2e:app-server
+      - run: npm run e2e:sdk
       - run: npm run build:single -w @auraxis/cli
+      - run: npm run pack:check
       - run: npm run build:native:all
       - run: npm publish -w @auraxis/core
         env:

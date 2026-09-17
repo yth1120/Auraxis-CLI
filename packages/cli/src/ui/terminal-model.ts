@@ -170,6 +170,21 @@ export function mouseScrollDelta(chunk: string): number {
   return delta;
 }
 
+export function appendPendingPrompt(queue: readonly string[], text: string): string[] {
+  return [...queue, text];
+}
+
+export function takeNextPendingPrompt(queue: readonly string[]): { next?: string; rest: string[] } {
+  const [next, ...rest] = queue;
+  return next === undefined ? { rest: [...queue] } : { next, rest };
+}
+
+export function withdrawPendingPrompt(queue: readonly string[]): { withdrawn?: string; rest: string[] } {
+  const rest = [...queue];
+  const withdrawn = rest.pop();
+  return withdrawn === undefined ? { rest } : { withdrawn, rest };
+}
+
 export function sessionToUiItems(session: SessionRecord): UiItem[] {
   const items: UiItem[] = [];
   for (const message of session.messages) {

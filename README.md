@@ -2,6 +2,8 @@
 
 GitHub: [yth1120/Auraxis-CLI](https://github.com/yth1120/Auraxis-CLI)
 
+[![CI](https://github.com/yth1120/Auraxis-CLI/actions/workflows/ci.yml/badge.svg)](https://github.com/yth1120/Auraxis-CLI/actions/workflows/ci.yml)
+
 纯本地运行的 Auraxis Agent 命令行工作台。
 
 该项目不依赖 Electron，也不依赖 Auraxis 桌面端。CLI 直接运行本地 Agent 核心，
@@ -123,7 +125,7 @@ headers、contextWindow 和 supportsImages：
 | 密钥 | `DEEPSEEK_API_KEY`、`AURAXIS_API_KEY`、`ANTHROPIC_API_KEY`、`GEMINI_API_KEY`、`OPENAI_API_KEY`、`OLLAMA_API_KEY` |
 | 运行配置 | `AURAXIS_PROVIDER`、`AURAXIS_MODEL`、`AURAXIS_API_BASE`、`DEEPSEEK_BASE_URL`、`AURAXIS_API_FAMILY`、`AURAXIS_REASONING_EFFORT`、`AURAXIS_TOOL_CHOICE`、`AURAXIS_CONTEXT_BUDGET`、`AURAXIS_MODE`、`AURAXIS_SANDBOX`、`AURAXIS_THEME`、`AURAXIS_VISION_DETAIL`、`AURAXIS_STRICT_TOOLS` |
 | 运行时 | `AURAXIS_HOME`、`AURAXIS_ALLOW_UNSAFE_CODE`、`AURAXIS_PYTHON_BIN`、`AURAXIS_PWSH`、`AURAXIS_SHELL` |
-| 集成 | `AURAXIS_LSP_COMMAND`、`AURAXIS_LSP_ARGS`、`AURAXIS_LSP_INIT_OPTIONS`、`AURAXIS_MCP_SERVERS`、`AURAXIS_TRUST_PROJECT_MCP`、`AURAXIS_TRUST_PROJECT_HOOKS`、`AURAXIS_PLUGIN_MARKETPLACE`、`AURAXIS_REMOTE_API`、`AURAXIS_REMOTE_TOKEN` |
+| 集成 | `AURAXIS_LSP_COMMAND`、`AURAXIS_LSP_ARGS`、`AURAXIS_LSP_INIT_OPTIONS`、`AURAXIS_LSP_DEBUG`、`AURAXIS_MCP_SERVERS`、`AURAXIS_TRUST_PROJECT_MCP`、`AURAXIS_TRUST_PROJECT_HOOKS`、`AURAXIS_PLUGIN_MARKETPLACE`、`AURAXIS_REMOTE_API`、`AURAXIS_REMOTE_TOKEN` |
 | 容器 | `AURAXIS_CONTAINER_RUNNER`、`AURAXIS_CONTAINER_IMAGE`、`AURAXIS_CONTAINER_WORKDIR`、`AURAXIS_CONTAINER_NETWORK` |
 
 项目 `.env` 会被读取，但 `AURAXIS_HOME`、`AURAXIS_ALLOW_UNSAFE_CODE`、容器、
@@ -312,9 +314,13 @@ LSP 客户端使用标准 `Content-Length` 帧协议，并支持通过
 `typescript-language-server` 使用的 TypeScript：
 
 ```powershell
-$env:AURAXIS_LSP_COMMAND = 'typescript-language-server --stdio'
+$env:AURAXIS_LSP_COMMAND = 'node'
+$env:AURAXIS_LSP_ARGS = '["C:/path/to/typescript-language-server/lib/cli.mjs","--stdio"]'
 $env:AURAXIS_LSP_INIT_OPTIONS = '{"tsserver":{"path":"C:/path/to/lib/tsserver.js"}}'
 ```
+
+需要排查语言服务器启动问题时，设置 `AURAXIS_LSP_DEBUG=1` 会输出命令行、参数和
+服务器 stderr；正常运行不会产生额外输出。
 
 ## 终端交互
 

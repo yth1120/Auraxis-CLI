@@ -14,8 +14,9 @@ export class LspManager {
   private child: ChildProcessWithoutNullStreams | null = null;
   private pending = new Map<number, { resolve: (value: unknown) => void; reject: (reason: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   private nextId = 1;
-  private buffer = '';
+  private buffer = Buffer.alloc(0);
   private closed = false;
+  private stderr = '';
 
   private constructor(
     private readonly command: string,
@@ -33,34 +34,50 @@ export class LspManager {
     } catch {
       args = [];
     }
+    if (process.env.AURAXIS_LSP_DEBUG === '1') {
+      process.stderr.write(`[LSP] command=${command} args=${JSON.stringify(args)}\n`);
+    }
     const manager = new LspManager(command, args, projectRoot);
     try {
       await manager.start();
       return manager;
-    } catch {
+    } catch (error) {
       await manager.close();
+      if (process.env.AURAXIS_LSP_DEBUG === '1') {
+        const detail = error instanceof Error ? error.message : String(error);
+        process.stderr.write(`[LSP] ${detail}\n`);
+      }
       return null;
     }
   }
 
   async start(): Promise<void> {
     if (this.closed) throw new Error('LSP client already closed');
+    const shell = this.args.length === 0 && /\s/.test(this.command);
     const child = spawn(this.command, this.args, {
       cwd: this.projectRoot,
-      shell: true,
+      shell,
       windowsHide: true,
       env: safeProcessEnv(),
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     this.child = child;
-    child.stderr.on('data', () => {});
+    child.stderr.on('data', (chunk) => {
+      this.stderr = `${this.stderr}${String(chunk)}`.slice(-4000);
+    });
     child.stdout.on('data', (chunk) => {
-      this.buffer += String(chunk);
+      if (process.env.AURAXIS_LSP_DEBUG === '1') {
+        process.stderr.write(`[LSP] recv ${JSON.stringify(String(chunk).slice(0, 500))}\n`);
+      }
+      this.buffer = Buffer.concat([this.buffer, Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk))]);
       this.drain();
     });
     child.on('error', (error) => this.rejectAll(error));
     child.on('close', () => {
-      if (!this.closed) this.rejectAll(new Error('LSP server exited'));
+      if (!this.closed) {
+        const detail = this.stderr.trim();
+        this.rejectAll(new Error(detail ? `LSP server exited: ${detail}` : 'LSP server exited'));
+      }
     });
     const rawInitializationOptions = process.env.AURAXIS_LSP_INIT_OPTIONS;
     const initializationOptions = rawInitializationOptions ? parseJsonObject(rawInitializationOptions) || {} : {};
@@ -147,17 +164,17 @@ export class LspManager {
     while (true) {
       const headerEnd = this.buffer.indexOf('\r\n\r\n');
       if (headerEnd < 0) return;
-      const headers = this.buffer.slice(0, headerEnd);
+      const headers = this.buffer.subarray(0, headerEnd).toString('utf8');
       const match = /content-length:\s*(\d+)/i.exec(headers);
       if (!match) {
-        this.buffer = this.buffer.slice(headerEnd + 4);
+        this.buffer = this.buffer.subarray(headerEnd + 4);
         continue;
       }
       const length = Number(match[1]);
       const bodyStart = headerEnd + 4;
       if (this.buffer.length < bodyStart + length) return;
-      const raw = this.buffer.slice(bodyStart, bodyStart + length);
-      this.buffer = this.buffer.slice(bodyStart + length);
+      const raw = this.buffer.subarray(bodyStart, bodyStart + length).toString('utf8');
+      this.buffer = this.buffer.subarray(bodyStart + length);
       try {
         const message = rpcResponseSchema.safeParse(parseJson(raw));
         if (
