@@ -9,6 +9,9 @@ on:
 
 permissions:
   contents: write
+  # npm Trusted Publishing（OIDC）：发布时用短时令牌换取发布权限，
+  # 配置好 Trusted Publisher 后即可删除 NPM_TOKEN，无需长期凭据。
+  id-token: write
 
 jobs:
   release:
@@ -33,14 +36,15 @@ jobs:
         run: echo "tag=v$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")" >> "$GITHUB_OUTPUT"
       # npm 发布放在资产上传之前：资产上传偶发被 GitHub 侧 500 拒绝，
       # 不应因此让 npm 包发不出去。
-      - name: Publish to npm (skipped without NPM_TOKEN)
+      - name: Publish to npm (OIDC, falls back to NPM_TOKEN)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          if [ -z "$NODE_AUTH_TOKEN" ]; then
-            echo "::warning::NPM_TOKEN 未配置，已跳过 npm 发布。"
-            echo "配置仓库 Secret NPM_TOKEN（npm Automation token）后重跑本 workflow 即可发布 npm 包。"
-            exit 0
+          echo "npm $(npm --version) / node $(node --version)"
+          if [ -n "$NODE_AUTH_TOKEN" ]; then
+            echo "使用 NPM_TOKEN 发布（首次发布占位，之后应切换到 Trusted Publishing）"
+          else
+            echo "未配置 NPM_TOKEN，尝试使用 Trusted Publishing（OIDC）发布"
           fi
           npm publish -w @auraxis/core
           npm publish -w @auraxis/cli
