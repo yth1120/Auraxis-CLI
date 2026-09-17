@@ -20,6 +20,7 @@ export interface CliOptions {
   strictTools?: boolean;
   theme?: string;
   reasoningEffort?: string;
+  thinking?: boolean;
   maxTokens?: number;
   maxSteps?: number;
   contextBudget?: number;
@@ -74,6 +75,12 @@ export function parseArgs(argv: string[]): CliOptions {
   const mode = valueOf(argv, '--mode') || valueOf(argv, '--permission-mode');
   const filesIndex = argv.indexOf('--files');
   const reasoningEffort = valueOf(argv, '--reasoning-effort');
+  const thinkingValue = valueOf(argv, '--thinking');
+  const thinking = has(argv, '--no-thinking')
+    ? false
+    : thinkingValue
+      ? !['off', 'false', '0', 'disabled'].includes(thinkingValue.toLowerCase())
+      : undefined;
   const maxSteps = parseStepLimit(valueOf(argv, '--max-steps') ?? valueOf(argv, '--max-iterations'));
   const rawMaxTokens = valueOf(argv, '--max-tokens');
   const maxTokens = rawMaxTokens ? Math.max(1, Math.floor(Number(rawMaxTokens))) : undefined;
@@ -105,6 +112,7 @@ export function parseArgs(argv: string[]): CliOptions {
         : undefined,
     theme: valueOf(argv, '--theme'),
     reasoningEffort,
+    thinking,
     maxTokens: Number.isFinite(maxTokens) ? maxTokens : undefined,
     maxSteps,
     contextBudget: Number.isFinite(contextBudget) ? contextBudget : undefined,
@@ -153,6 +161,8 @@ export function usage(): string {
     '  --no-strict-tools         禁用 strict Function Calling',
     '  --theme <dark|light|neon|mono>  主题',
     '  --reasoning-effort <low|high|max>',
+    '  --thinking <on|off>       开启或关闭思考模式（默认开启）',
+    '  --no-thinking             等价于 --thinking off',
     '  --tool-choice <auto|none|required>',
     '  --max-tokens <n>',
     '  --max-steps <n>           单次任务的工具轮次上限；0/-1 表示不设上限',

@@ -154,11 +154,14 @@ export class DeepSeekClient implements LlmClient {
       }));
       body.tool_choice = this.normalizeToolChoice(request.toolChoice);
     }
-    if (request.reasoningEffort) {
+    if (request.thinking === false) {
+      body.thinking = { type: 'disabled' };
+    } else if (request.reasoningEffort || request.thinking === true) {
       body.thinking = { type: 'enabled' };
-      body.reasoning_effort = request.reasoningEffort;
+      if (request.reasoningEffort) body.reasoning_effort = request.reasoningEffort;
     }
-    if (request.temperature !== undefined) {
+    // 官方文档：思考模式下 temperature 不生效，仅在关闭思考时下发。
+    if (request.thinking === false && request.temperature !== undefined) {
       body.temperature = request.temperature;
     }
     if (request.responseFormat === 'json_object') {

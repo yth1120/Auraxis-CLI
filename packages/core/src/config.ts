@@ -21,10 +21,17 @@ import {
 } from './validation.js';
 
 export const DEEPSEEK_API_ORIGIN = 'https://api.deepseek.com';
-export const DEFAULT_API_BASE = `${DEEPSEEK_API_ORIGIN}/beta/chat/completions`;
+export const DEFAULT_API_BASE = `${DEEPSEEK_API_ORIGIN}/chat/completions`;
 export const DEFAULT_RESPONSES_API_BASE = `${DEEPSEEK_API_ORIGIN}/responses`;
 export const DEFAULT_DEEPSEEK_ANTHROPIC_API_BASE = `${DEEPSEEK_API_ORIGIN}/anthropic/v1/messages`;
 export const DEFAULT_MAX_STEPS = 500;
+export const DEFAULT_MODEL = 'deepseek-flash';
+
+export function canonicalModelId(model: string): string {
+  return model === 'deepseek-v4-flash' || model === 'deepseek-v4-flash-vision-exp'
+    ? DEFAULT_MODEL
+    : model;
+}
 
 function normalizeMaxSteps(value: unknown): number {
   const parsed = typeof value === 'number' ? value : Number(value);
@@ -34,17 +41,15 @@ function normalizeMaxSteps(value: unknown): number {
 }
 
 export const BUILT_IN_MODELS = [
-  { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', provider: 'deepseek', maxTokens: 384000, contextWindow: 1_000_000 },
-  { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', provider: 'deepseek', maxTokens: 384000, contextWindow: 1_000_000 },
   {
-    id: 'deepseek-v4-flash-vision-exp',
-    name: 'DeepSeek V4 Flash Vision Exp',
+    id: 'deepseek-flash',
+    name: 'DeepSeek V4.1 Flash',
     provider: 'deepseek',
     maxTokens: 384000,
     contextWindow: 1_000_000,
     supportsImages: true,
-    experimental: true,
   },
+  { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', provider: 'deepseek', maxTokens: 384000, contextWindow: 1_000_000 },
 ] as const;
 
 export interface AppPaths {
@@ -98,6 +103,8 @@ export interface RuntimeConfig {
   visionDetail: ImageDetail;
   strictTools: boolean;
   maxTokens: number;
+  /** DeepSeek thinking mode toggle. Enabled by default. */
+  thinking: boolean;
   /** 单次任务的工具轮次上限；0 或负数表示不设上限。 */
   maxSteps: number;
   /** @deprecated 使用 maxSteps。 */
@@ -121,6 +128,7 @@ export interface ConfigOverrides {
   theme?: string;
   reasoningEffort?: string;
   maxTokens?: number;
+  thinking?: boolean;
   maxSteps?: number;
   /** @deprecated 使用 maxSteps。 */
   maxIterations?: number;
@@ -291,13 +299,13 @@ export async function loadRuntimeConfig(overrides: ConfigOverrides = {}): Promis
     (typeof globalConfig.model === 'string' && globalConfig.model) ||
     (typeof projectConfig.model === 'string' && projectConfig.model) ||
     process.env.AURAXIS_MODEL ||
-    'deepseek-v4-pro';
+    DEFAULT_MODEL;
   const customModel = customModels.find((item) => item.id === model);
-  const builtInModel = BUILT_IN_MODELS.find((item) => item.id === model);
+  const builtInModel = BUILT_IN_MODELS.find((item) => item.id === canonicalModelId(model));
   const providerValue =
     overrides.provider ||
     customModel?.provider ||
-    BUILT_IN_MODELS.find((item) => item.id === model)?.provider ||
+    BUILT_IN_MODELS.find((item) => item.id === canonicalModelId(model))?.provider ||
     process.env.AURAXIS_PROVIDER ||
     'deepseek';
   const provider = normalizeModelProvider(providerValue);
@@ -352,6 +360,11 @@ export async function loadRuntimeConfig(overrides: ConfigOverrides = {}): Promis
     projectConfig.maxTokens ??
     globalConfig.maxTokens ??
     builtInModel?.maxTokens;
+  const thinkingValue =
+    overrides.thinking ??
+    projectConfig.thinking ??
+    globalConfig.thinking ??
+    process.env.AURAXIS_THINKING;
   const maxStepsValue =
     overrides.maxSteps ??
     overrides.maxIterations ??
@@ -413,6 +426,7 @@ export async function loadRuntimeConfig(overrides: ConfigOverrides = {}): Promis
         ? provider === 'deepseek' && apiFamily === 'chat'
         : toBoolean(strictToolsValue),
     maxTokens,
+    thinking: thinkingValue === undefined ? true : toBoolean(thinkingValue),
     maxSteps,
     maxIterations: maxSteps,
     contextBudget,

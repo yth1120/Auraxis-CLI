@@ -130,9 +130,11 @@ class AnthropicClient extends RetryingClient {
       body.tool_choice = toAnthropicToolChoice(request.toolChoice);
     }
     if (request.temperature !== undefined) body.temperature = request.temperature;
-    if (request.reasoningEffort) {
+    if (request.thinking === false) {
+      body.thinking = { type: 'disabled' };
+    } else if (request.reasoningEffort || request.thinking === true) {
       body.thinking = { type: 'enabled', budget_tokens: 4096 };
-      if (/api\.deepseek\.com\/anthropic/i.test(this.apiBase)) {
+      if (request.reasoningEffort && /api\.deepseek\.com\/anthropic/i.test(this.apiBase)) {
         body.output_config = { effort: request.reasoningEffort };
       }
     }

@@ -45,6 +45,16 @@ describe('parseArgs', () => {
     expect(parseArgs(['--max-iterations', '7']).maxSteps).toBe(7);
   });
 
+  it('parses the thinking toggle', () => {
+    expect(parseArgs([]).thinking).toBeUndefined();
+    expect(parseArgs(['--thinking', 'on']).thinking).toBe(true);
+    expect(parseArgs(['--thinking', 'off']).thinking).toBe(false);
+    expect(parseArgs(['--thinking', 'disabled']).thinking).toBe(false);
+    expect(parseArgs(['--no-thinking']).thinking).toBe(false);
+    expect(usage()).toContain('--thinking');
+    expect(usage()).toContain('--no-thinking');
+  });
+
   it('maps each provider to its credential name', () => {
     expect(apiKeyEnvName()).toBe('DEEPSEEK_API_KEY');
     expect(apiKeyEnvName('deepseek')).toBe('DEEPSEEK_API_KEY');

@@ -11,6 +11,7 @@ auraxis --theme neon
 auraxis --run "修复登录 bug" --auto-approve
 auraxis --code-file scripts/agent.ts
 auraxis --api-family responses --run "读取 README.md"
+auraxis --thinking off --run "快速回答"
 auraxis --complete "function add(a, b) {"
 auraxis --fim "function add(a, b) {|| return a + b; }"
 auraxis --files list
@@ -45,6 +46,8 @@ auraxis --doctor
 - `Task*` / `Job*` 管理后台任务，`Pty` / `Terminal*` 提供持久交互终端
 - `NotebookEdit` 支持 `.ipynb` 单元格读写，`Delete` 支持带撤销快照删除
 - `/reasoning` 设置思考强度，`--reasoning-effort` 可在无头模式使用
+- 思考模式默认开启（`deepseek-flash` / `deepseek-v4-pro`，默认强度 high）；
+  `--thinking off`、`--no-thinking` 或 `/config` 的「思考模式」项可关闭
 - 命令历史自动保存到本地并跨重启恢复
 - 输入 `/` 打开命令联想面板，支持 ↑↓ / Tab 选择、Enter 执行、Esc 关闭
 - 鼠标滚轮或 PgUp/PgDn 滚动历史消息

@@ -100,6 +100,33 @@ describe('DeepSeek branch coverage', () => {
     expect(body.thinking).toEqual({ type: 'enabled' });
     expect(body.response_format).toEqual({ type: 'json_object' });
     expect(body.tool_choice).toBe('required');
+    // 官方文档：思考模式下 temperature 无效果，不下发。
+    expect(body).not.toHaveProperty('temperature');
+    expect(body.reasoning_effort).toBe('max');
+  });
+
+  it('disables thinking and keeps temperature when thinking is off', async () => {
+    let body: Record<string, unknown> = {};
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_input: unknown, init?: RequestInit) => {
+        body = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>;
+        return new Response(
+          JSON.stringify({ choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }] }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }),
+    );
+    const client = new DeepSeekClient('key', 'https://example.test/v1/chat/completions', 'm');
+    await client.chat({
+      messages: [{ role: 'user', content: 'hi' }],
+      thinking: false,
+      reasoningEffort: 'max',
+      temperature: 0.2,
+      stream: false,
+    });
+    expect(body.thinking).toEqual({ type: 'disabled' });
+    expect(body).not.toHaveProperty('reasoning_effort');
     expect(body.temperature).toBe(0.2);
   });
 

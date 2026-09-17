@@ -59,7 +59,7 @@ export function chatMessageText(content?: string | ChatContentPart[]): string {
 }
 
 export function modelSupportsImages(model: string): boolean {
-  return /(vl|vision|omni|multimodal)/i.test(model);
+  return /(^|[-_])deepseek(-v4)?-flash/i.test(model) || /(vl|vision|omni|multimodal)/i.test(model);
 }
 
 export interface LlmToolSpec {
@@ -73,6 +73,8 @@ export interface LlmRequest {
   messages: ChatMessage[];
   tools?: LlmToolSpec[];
   toolChoice?: ToolChoice;
+  /** DeepSeek thinking mode toggle. Defaults to enabled. */
+  thinking?: boolean;
   stream?: boolean;
   reasoningEffort?: ReasoningEffort;
   maxTokens?: number;
@@ -201,6 +203,8 @@ export interface RunOptions {
   mode: ApprovalPolicy;
   sandboxMode: SandboxMode;
   maxTokens?: number;
+  /** DeepSeek thinking mode toggle. Defaults to enabled. */
+  thinking?: boolean;
   /** 单次任务的工具轮次上限；0 或负数表示不设上限。 */
   maxSteps?: number;
   /** @deprecated 使用 maxSteps。 */

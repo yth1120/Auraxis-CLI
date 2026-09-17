@@ -31,6 +31,7 @@ export interface AppServerOptions {
   mode: ApprovalPolicy;
   sandboxMode: SandboxMode;
   reasoningEffort: ReasoningEffort;
+  thinking?: boolean;
   toolChoice: ToolChoice;
   visionDetail?: ImageDetail;
   strictTools?: boolean;
@@ -235,6 +236,7 @@ export class AppServer {
         maxSteps: this.options.maxSteps ?? this.options.maxIterations,
         contextBudget: this.options.contextBudget,
         reasoningEffort: this.options.reasoningEffort,
+        thinking: this.options.thinking,
         toolChoice: this.options.toolChoice,
         visionDetail: this.options.visionDetail,
         strictTools: this.options.strictTools,

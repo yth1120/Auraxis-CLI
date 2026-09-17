@@ -49,6 +49,33 @@ describe('ResponsesClient', () => {
     expect(captured.instructions).toBe('system');
     expect(captured.reasoning).toEqual({ effort: 'max' });
     expect(captured.text).toEqual({ format: { type: 'json_object' } });
+    // 官方文档：Responses API 为无状态接口，store 恒为 false。
+    expect(captured.store).toBe(false);
+  });
+
+  it('disables thinking via reasoning effort none when thinking is off', async () => {
+    let captured: Record<string, unknown> = {};
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: unknown, init?: RequestInit) => {
+        captured = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>;
+        return new Response(
+          JSON.stringify({ id: 'r1', status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: 'ok' }] }] }),
+          { status: 200 },
+        );
+      }),
+    );
+    const client = new ResponsesClient('key', 'https://api.deepseek.com', 'deepseek-flash');
+    await client.chat({
+      messages: [{ role: 'user', content: 'hi' }],
+      thinking: false,
+      reasoningEffort: 'max',
+      temperature: 1.4,
+      stream: false,
+    });
+    expect(captured.reasoning).toEqual({ effort: 'none' });
+    expect(captured.model).toBe('deepseek-flash');
+    expect(captured.temperature).toBe(1.4);
   });
 
   it('aggregates streamed output, reasoning and tool arguments', async () => {

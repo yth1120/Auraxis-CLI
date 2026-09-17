@@ -69,13 +69,14 @@ auraxis --no-banner              # 跳过启动卡片，直接进入输入
 auraxis --run "修复登录 bug"      # 非交互一次执行
 auraxis --code-file scripts/agent.ts  # 以 Code Mode 运行 TypeScript 程序
 auraxis --model deepseek-v4-pro --reasoning-effort high
+auraxis --model deepseek-flash --thinking off --run "快速回答"
 auraxis --provider anthropic --model claude-sonnet-4-5
 auraxis --provider deepseek --api-family responses --run "读取 README.md"
 auraxis --provider deepseek --api-family anthropic --run "读取 README.md"
 auraxis --complete "function add(a, b) {"
 auraxis --fim "function add(a, b) {|| return a + b; }"
 auraxis --files list
-auraxis --vision-detail low --model deepseek-v4-flash-vision-exp
+auraxis --vision-detail low --model deepseek-flash
 auraxis --sandbox container --run "运行测试"
 auraxis --context-budget 120000 --run "处理大型项目"
 auraxis --max-steps 50 --run "限制一次任务最多执行 50 个工具轮次"
@@ -124,7 +125,7 @@ headers、contextWindow 和 supportsImages：
 | 分类 | 变量 |
 | --- | --- |
 | 密钥 | `DEEPSEEK_API_KEY`、`AURAXIS_API_KEY`、`ANTHROPIC_API_KEY`、`GEMINI_API_KEY`、`OPENAI_API_KEY`、`OLLAMA_API_KEY` |
-| 运行配置 | `AURAXIS_PROVIDER`、`AURAXIS_MODEL`、`AURAXIS_API_BASE`、`DEEPSEEK_BASE_URL`、`AURAXIS_API_FAMILY`、`AURAXIS_REASONING_EFFORT`、`AURAXIS_TOOL_CHOICE`、`AURAXIS_CONTEXT_BUDGET`、`AURAXIS_MAX_STEPS`、`AURAXIS_MODE`、`AURAXIS_SANDBOX`、`AURAXIS_THEME`、`AURAXIS_VISION_DETAIL`、`AURAXIS_STRICT_TOOLS` |
+| 运行配置 | `AURAXIS_PROVIDER`、`AURAXIS_MODEL`、`AURAXIS_API_BASE`、`DEEPSEEK_BASE_URL`、`AURAXIS_API_FAMILY`、`AURAXIS_REASONING_EFFORT`、`AURAXIS_THINKING`、`AURAXIS_TOOL_CHOICE`、`AURAXIS_CONTEXT_BUDGET`、`AURAXIS_MAX_STEPS`、`AURAXIS_MODE`、`AURAXIS_SANDBOX`、`AURAXIS_THEME`、`AURAXIS_VISION_DETAIL`、`AURAXIS_STRICT_TOOLS` |
 | 运行时 | `AURAXIS_HOME`、`AURAXIS_ALLOW_UNSAFE_CODE`、`AURAXIS_PYTHON_BIN`、`AURAXIS_PWSH`、`AURAXIS_SHELL` |
 | 集成 | `AURAXIS_LSP_COMMAND`、`AURAXIS_LSP_ARGS`、`AURAXIS_LSP_INIT_OPTIONS`、`AURAXIS_LSP_DEBUG`、`AURAXIS_MCP_SERVERS`、`AURAXIS_TRUST_PROJECT_MCP`、`AURAXIS_TRUST_PROJECT_HOOKS`、`AURAXIS_PLUGIN_MARKETPLACE`、`AURAXIS_REMOTE_API`、`AURAXIS_REMOTE_TOKEN` |
 | 容器 | `AURAXIS_CONTAINER_RUNNER`、`AURAXIS_CONTAINER_IMAGE`、`AURAXIS_CONTAINER_WORKDIR`、`AURAXIS_CONTAINER_NETWORK` |
@@ -138,20 +139,55 @@ LSP、MCP 和插件市场等安全相关变量不会从项目 `.env` 注入，�
 默认使用 OpenAI 兼容的 Chat Completions。可以通过 `--api-family` / `/api-family`
 切换三种协议：
 
-- `chat`：默认，支持 Thinking、Tool Calls、JSON Output、strict Function Calling。
-- `responses`：DeepSeek 原生 Responses API，面向 Codex 生态，支持流式输出和
-  `file_id` 图片；启用后仍复用同一套 Agent 工具循环。
-- `anthropic`：DeepSeek 官方的 Anthropic 兼容端点，可以通过 Claude Code 生态工具
-  或使用 `AnthropicClient` 调用 DeepSeek 模型。
+- `chat`：默认，`https://api.deepseek.com/chat/completions`，支持 Thinking、
+  Tool Calls、JSON Output、strict Function Calling。
+- `responses`：DeepSeek 原生 Responses API `https://api.deepseek.com/responses`，
+  面向 Codex 生态，支持流式输出、`image_url` / `file_id` 图片与 `reasoning.effort`；
+  该接口是无状态 API（`store` 恒为 false），启用后仍复用同一套 Agent 工具循环。
+- `anthropic`：DeepSeek 官方的 Anthropic 兼容端点
+  `https://api.deepseek.com/anthropic`，`claude-opus*` 会映射到 `deepseek-v4-pro`，
+  `claude-haiku*` / `claude-sonnet*` 映射到 `deepseek-flash`。
 
 `--strict-tools` / `/strict-tools on` 会为 DeepSeek Chat Completions 启用
 strict Function Calling，并自动规范化工具 JSON Schema；默认开启，
 `--no-strict-tools` 可以关闭。
 
+### 模型
+
+DeepSeek 官方当前提供两个模型：
+
+| 模型 ID | 版本 | 上下文 | 最大输出 | 视觉 |
+| --- | --- | --- | --- | --- |
+| `deepseek-flash` | DeepSeek-V4.1-Flash | 1M | 384K | 支持 |
+| `deepseek-v4-pro` | DeepSeek-V4-Pro-0813 | 1M | 384K | 不支持 |
+
+`deepseek-flash` 是 CLI 的默认模型。历史名称 `deepseek-v4-flash` 与
+`deepseek-v4-flash-vision-exp` 仍然可用，Auraxis 会把它们归一化到
+`deepseek-flash`，请求由同一模型承接。
+
+### 思考模式
+
+思考模式默认开启，默认强度 `high`。三种协议的下发方式与官方文档一致：
+
+| 协议 | 开关 | 强度 |
+| --- | --- | --- |
+| Chat Completions | `thinking: { type: enabled / disabled }` | `reasoning_effort` |
+| Responses | `reasoning.effort: none` 关闭，其余取值开启 | `reasoning.effort` |
+| Anthropic | `thinking: { type: enabled / disabled }` | `output_config.effort` |
+
+官方 effort 映射为 `minimal → low`、`medium → high`、`xhigh → high`、
+`ultra → max`，Auraxis 的 `low` / `high` / `max` 与之一一对应。
+
+使用 `--thinking off` / `--no-thinking` 关闭思考，交互模式在 `/config` 的
+「思考模式」项中切换，`AURAXIS_THINKING=off` 可作为默认值。思考模式下
+`temperature` 不生效，Auraxis 因此不会在思考模式请求中下发该字段。
+
 ## 图片与 Files API
 
-`deepseek-v4-flash-vision-exp` 支持 JPEG / PNG / GIF / WebP。`--vision-detail`
+`deepseek-flash` 支持 JPEG / PNG / GIF / WebP。`--vision-detail`
 可控制图片精度（`low` 会先将图片缩放为 512×512，适合截图和 UI 预览）。
+图片可以按官方三种方式提供：base64 data URL、外链 http(s) URL，或 Files API
+返回的 `file_id`；`file_id` 图片上限 64 MiB，且不受 32 MiB 单图内联限制。
 
 `ReadImage` 会在图片较大时自动通过 DeepSeek Files API 上传；也可以手动管理：
 

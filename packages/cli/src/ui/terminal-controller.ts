@@ -7,6 +7,7 @@ import {
   getAppPaths,
   getTools,
   getTool,
+  DEFAULT_MODEL,
   BUILT_IN_MODELS,
   DeepSeekClient,
   DeepSeekFilesClient,
@@ -95,6 +96,11 @@ const REASONING_OPTIONS: ChoiceOption[] = [
   { id: 'max', label: 'max', description: '深度推理' },
 ];
 
+const THINKING_OPTIONS: ChoiceOption[] = [
+  { id: 'on', label: 'on', description: '启用思考模式（默认）' },
+  { id: 'off', label: 'off', description: '关闭思考模式，直接回答' },
+];
+
 const SANDBOX_OPTIONS: ChoiceOption[] = [
   { id: 'read', label: 'read', description: '只读，禁止写入与执行' },
   { id: 'workspace-write', label: 'workspace-write', description: '允许项目内修改' },
@@ -147,6 +153,7 @@ const CONFIG_OPTIONS: ChoiceOption[] = [
   { id: 'provider', label: '供应商', description: 'deepseek / openai / ...' },
   { id: 'permission', label: '审批模式', description: 'ask / plan / auto' },
   { id: 'reasoning', label: '思考强度', description: 'low / high / max' },
+  { id: 'thinking', label: '思考模式', description: 'on / off' },
   { id: 'sandbox', label: '沙箱', description: 'read / workspace-write / full / container' },
   { id: 'api-family', label: '接口协议', description: 'chat / responses / anthropic' },
   { id: 'vision-detail', label: '视觉精度', description: 'auto / low / high / original' },
@@ -176,7 +183,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
   const [running, setRunning] = useState(false);
   const [exitArmed, setExitArmed] = useState(false);
   const [prompt, setPrompt] = useState<PromptState>(null);
-  const [model, setModel] = useState(options.model || 'deepseek-v4-pro');
+  const [model, setModel] = useState(options.model || DEFAULT_MODEL);
   const [provider, setProvider] = useState<ModelProvider>((options.provider || 'deepseek') as ModelProvider);
   const [apiFamily, setApiFamily] = useState<ApiFamily>('chat');
   const [visionDetail, setVisionDetail] = useState<ImageDetail>('auto');
@@ -184,6 +191,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
   const [mode, setMode] = useState<string>(options.mode || 'ask');
   const [sandbox, setSandbox] = useState<string>(options.sandbox || 'workspace-write');
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('high');
+  const [thinkingEnabled, setThinkingEnabled] = useState(true);
   const [toolChoice, setToolChoice] = useState<ToolChoice>('auto');
   const [apiBase, setApiBase] = useState(options.apiBase || '');
   const [maxTokens, setMaxTokens] = useState<number | undefined>(options.maxTokens);
@@ -279,6 +287,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
       visionDetail: options.visionDetail,
       strictTools: options.strictTools,
       reasoningEffort: options.reasoningEffort,
+      thinking: options.thinking,
       toolChoice: options.toolChoice,
       maxTokens: options.maxTokens,
       maxSteps: options.maxSteps,
@@ -293,12 +302,13 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
       setMode(config.mode);
       setSandbox(config.sandboxMode);
       setReasoningEffort(config.reasoningEffort);
+      setThinkingEnabled(config.thinking);
       setToolChoice(config.toolChoice);
       setApiBase(config.apiBase);
       setMaxTokens(config.maxTokens);
       if (config.theme) setTheme(config.theme as ThemeName);
     });
-  }, [options.project, options.model, options.provider, options.apiFamily, options.apiBase, options.mode, options.sandbox, options.visionDetail, options.strictTools, options.reasoningEffort, options.toolChoice, options.maxTokens, options.maxSteps, options.contextBudget, options.theme, options.session]);
+  }, [options.project, options.model, options.provider, options.apiFamily, options.apiBase, options.mode, options.sandbox, options.visionDetail, options.strictTools, options.reasoningEffort, options.thinking, options.toolChoice, options.maxTokens, options.maxSteps, options.contextBudget, options.theme, options.session]);
 
   useEffect(() => {
     if (!options.session) return;
@@ -472,8 +482,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
           ? BUILT_IN_MODELS.map((item) => ({
               id: item.id,
               name: item.name,
-              provider: 'deepseek',
-              experimental: 'experimental' in item ? item.experimental : undefined,
+              provider: 'deepseek' as const,
             }))
           : [];
       const custom: ModelPickerState['models'] = config.customModels.map((item) => ({
@@ -609,6 +618,15 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
           void saveRuntimeConfig({ reasoningEffort: selectedId as ReasoningEffort });
           addItem({ kind: 'system', text: `已切换思考强度：${selectedId}` });
           break;
+        case 'thinking':
+          if (!['on', 'off'].includes(selectedId)) return;
+          {
+            const enabled = selectedId === 'on';
+            setThinkingEnabled(enabled);
+            void saveRuntimeConfig({ thinking: enabled });
+            addItem({ kind: 'system', text: `思考模式：${enabled ? 'on' : 'off'}` });
+          }
+          break;
         case 'sandbox':
           if (!['read', 'workspace-write', 'full', 'container'].includes(selectedId)) return;
           setSandbox(selectedId);
@@ -712,6 +730,9 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
         case 'reasoning':
           openChoicePicker('reasoning', '选择思考强度', REASONING_OPTIONS, reasoningEffort);
           break;
+        case 'thinking':
+          openChoicePicker('thinking', '选择思考模式', THINKING_OPTIONS, thinkingEnabled ? 'on' : 'off');
+          break;
         case 'sandbox':
           openChoicePicker('sandbox', '选择沙箱策略', SANDBOX_OPTIONS, sandbox);
           break;
@@ -762,6 +783,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
       sandbox,
       strictTools,
       theme,
+      thinkingEnabled,
       toolChoice,
       visionDetail,
     ],
@@ -1113,6 +1135,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
         visionDetail,
         strictTools,
         reasoningEffort,
+        thinking: thinkingEnabled,
         toolChoice,
         maxTokens,
         maxSteps: options.maxSteps,
@@ -1235,6 +1258,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
           maxSteps: config.maxSteps,
           contextBudget: config.contextBudget,
           reasoningEffort: config.reasoningEffort,
+          thinking: config.thinking,
           toolChoice: config.toolChoice,
           visionDetail: config.visionDetail,
           strictTools: config.strictTools,
@@ -1255,7 +1279,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
         addItem({ kind: 'error', text: error instanceof Error ? error.message : String(error) });
       }
     },
-    [addItem, appendAssistant, handleEvent, model, provider, apiFamily, mode, options, sandbox, saveSession, visionDetail, strictTools, reasoningEffort, toolChoice, apiBase, maxTokens],
+    [addItem, appendAssistant, handleEvent, model, provider, apiFamily, mode, options, sandbox, saveSession, visionDetail, strictTools, reasoningEffort, thinkingEnabled, toolChoice, apiBase, maxTokens],
   );
 
   const runPrompt = useCallback(
@@ -1288,6 +1312,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
         visionDetail,
         strictTools,
         reasoningEffort,
+        thinking: thinkingEnabled,
         toolChoice,
         maxTokens,
         maxSteps: options.maxSteps,
@@ -1508,7 +1533,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
         await codeLsp?.close().catch(() => {});
       }
     },
-    [addItem, apiBase, apiFamily, maxTokens, model, options, projectFull, provider, reasoningEffort, sandbox, strictTools, toolChoice, updateActivity, visionDetail],
+    [addItem, apiBase, apiFamily, maxTokens, model, options, projectFull, provider, reasoningEffort, sandbox, strictTools, thinkingEnabled, toolChoice, updateActivity, visionDetail],
   );
 
   const runCodeFile = useCallback(
@@ -1652,6 +1677,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
           `会话: ${formatSessionTime(sessionSeconds)}`,
           `项目路径: ${projectFull}`,
           `思考强度: ${reasoningEffort}`,
+          `思考模式: ${thinkingEnabled ? 'on' : 'off'}`,
           `视觉精度: ${visionDetail}`,
           `Strict Tools: ${strictTools ? 'on' : 'off'}`,
           `工具选择: ${toolChoice}`,
@@ -2450,6 +2476,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
     mode,
     sandbox,
     reasoningEffort,
+    thinkingEnabled,
     toolChoice,
     apiBase,
     maxTokens,

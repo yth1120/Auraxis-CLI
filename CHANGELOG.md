@@ -1,5 +1,33 @@
 # Auraxis CLI Changelog
 
+## 1.0.0 — DeepSeek 官方接口同步
+
+对齐 DeepSeek 官网 2026-09 的接口文档。
+
+### 变更
+
+- 默认模型切换为 `deepseek-flash`（DeepSeek-V4.1-Flash，原生多模态），
+  内置模型表更新为 `deepseek-flash` + `deepseek-v4-pro`，两者同为 1M 上下文、
+  384K 最大输出
+- 历史模型名 `deepseek-v4-flash`、`deepseek-v4-flash-vision-exp` 归一化到
+  `deepseek-flash`，旧配置无需修改即可继续运行
+- 默认 Base URL 回归标准 OpenAI 兼容端点
+  `https://api.deepseek.com/chat/completions`，不再使用 `/beta` 前缀；
+  Responses 为 `https://api.deepseek.com/responses`，
+  Anthropic 为 `https://api.deepseek.com/anthropic`
+- 新增思考模式开关 `--thinking <on|off>` / `--no-thinking` / `AURAXIS_THINKING`
+  与 `/config` 的「思考模式」项；官方语义为 Chat/Anthropic 发
+  `thinking.type`、Responses 发 `reasoning.effort = none`，默认开启、默认 high
+- effort 取值对齐官方 `low` / `high` / `max`（官方 minimal/medium/xhigh/ultra
+  的映射由服务端完成）
+- 思考模式下不再下发 `temperature`（官方说明该参数在思考模式无效果）
+- Responses 请求固定 `store: false`，与官方无状态接口一致
+- Anthropic 兼容端点补齐 `output_config.effort` 与 thinking 开关，并记录官方
+  模型映射规则（`claude-opus* → deepseek-v4-pro`，`claude-haiku*`/`claude-sonnet*`
+  → `deepseek-flash`）
+- 视觉能力跟随模型：`deepseek-flash` 支持 base64 data URL、外链 URL 与
+  Files API `file_id` 三种图片输入
+
 ## 1.0.0
 
 首个可发布版本。

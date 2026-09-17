@@ -93,7 +93,7 @@ function App({ options }: { options: CliOptions }) {
               project={controller.projectFull}
               model={controller.model}
               permission={controller.mode}
-              reasoningEffort={controller.reasoningEffort}
+              reasoningEffort={controller.thinkingEnabled ? controller.reasoningEffort : 'off'}
               homeFocus={controller.homeFocus}
               selectedCommand={controller.selectedCommand}
             />
@@ -205,7 +205,7 @@ function App({ options }: { options: CliOptions }) {
           <StatusBar
             model={controller.model}
             permission={controller.mode}
-            reasoningEffort={controller.reasoningEffort}
+            reasoningEffort={controller.thinkingEnabled ? controller.reasoningEffort : 'off'}
             running={controller.running}
             currentTool={currentTool}
           />

@@ -75,8 +75,7 @@ export async function resolveModelChoices(
     models: BUILT_IN_MODELS.map((item) => ({
       id: item.id,
       name: item.name,
-      provider: 'deepseek',
-      experimental: 'experimental' in item ? item.experimental : undefined,
+      provider: 'deepseek' as const,
     })),
   };
 }

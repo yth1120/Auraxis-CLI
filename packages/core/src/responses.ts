@@ -57,6 +57,7 @@ export class ResponsesClient implements LlmClient {
       input: input.items,
       max_output_tokens: request.maxTokens ?? this.defaultMaxTokens,
       stream,
+      store: false,
     };
     if (input.instructions) body.instructions = input.instructions;
     if (request.tools?.length) {
@@ -68,7 +69,9 @@ export class ResponsesClient implements LlmClient {
       }));
       body.tool_choice = toResponsesToolChoice(request.toolChoice);
     }
-    body.reasoning = { effort: request.reasoningEffort || 'high' };
+    body.reasoning = {
+      effort: request.thinking === false ? 'none' : request.reasoningEffort || 'high',
+    };
     if (request.temperature !== undefined) body.temperature = request.temperature;
     if (request.responseFormat === 'json_object') {
       body.text = { format: { type: 'json_object' } };

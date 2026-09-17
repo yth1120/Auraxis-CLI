@@ -85,6 +85,7 @@ export interface ChoiceOption {
 export type ChoicePickerKind =
   | 'permission'
   | 'reasoning'
+  | 'thinking'
   | 'sandbox'
   | 'provider'
   | 'api-family'
@@ -132,6 +133,7 @@ export interface TerminalController {
   mode: string;
   sandbox: string;
   reasoningEffort: ReasoningEffort;
+  thinkingEnabled: boolean;
   toolChoice: ToolChoice;
   apiBase: string;
   maxTokens?: number;

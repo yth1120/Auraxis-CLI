@@ -7,11 +7,15 @@
 
 提供：
 
-- DeepSeek OpenAI 兼容流式客户端
-- DeepSeek Responses API 客户端（支持多轮工具调用、Thinking、图片与 Files API）
+- DeepSeek OpenAI 兼容流式客户端（`deepseek-flash` / `deepseek-v4-pro`，1M 上下文、384K 输出）
+- DeepSeek Responses API 客户端（支持多轮工具调用、Thinking、图片与 Files API；
+  无状态接口，`store` 恒为 false，思考开关走 `reasoning.effort = none`）
 - DeepSeek Files API 客户端（上传、列举、查询、删除）
 - Anthropic / Gemini / OpenAI / Ollama / custom provider 适配
-- DeepSeek Anthropic 兼容端点预设与 strict Function Calling
+- DeepSeek Anthropic 兼容端点预设（`claude-opus* → deepseek-v4-pro`、
+  `claude-haiku*`/`claude-sonnet* → `deepseek-flash`）与 strict Function Calling
+- 思考模式统一开关：Chat/Anthropic 下发 `thinking.type`，Responses 下发
+  `reasoning.effort = none`，effort 为 `low` / `high` / `max`（默认开启、默认 high）
 - ReAct 循环
 - Code Mode：TypeScript 工人线程工具编排、JS / Python / Shell 隔离运行
 - RunWorkflow 多 Agent 编排、Task/Job 后台任务、PTY/Terminal 持久终端

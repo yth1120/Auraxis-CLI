@@ -6,7 +6,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(scriptDir, '..');
 const cli = path.join(projectRoot, 'packages', 'cli', 'dist', 'main.js');
 const provider = process.argv[2] || process.env.AURAXIS_LIVE_PROVIDER || 'deepseek';
-const model = process.env.AURAXIS_LIVE_MODEL || 'deepseek-v4-flash';
+const model = process.env.AURAXIS_LIVE_MODEL || 'deepseek-flash';
 
 const child = spawn(
   process.execPath,

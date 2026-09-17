@@ -42,4 +42,30 @@ describe('runtime config', () => {
     expect(config.contextBudget).toBe(12_000);
     expect(config.apiBase).toBe('https://api.anthropic.com/v1/messages');
   });
+
+  it('defaults to deepseek-flash with the official OpenAI-compatible base URL', async () => {
+    dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'auraxis-defaults-'));
+    process.env.AURAXIS_HOME = dataDir;
+    const config = await loadRuntimeConfig();
+    expect(config.model).toBe('deepseek-flash');
+    expect(config.apiBase).toBe('https://api.deepseek.com/chat/completions');
+    expect(config.apiFamily).toBe('chat');
+    expect(config.maxTokens).toBe(384_000);
+    expect(config.contextBudget).toBe(1_000_000);
+    // 官方文档：思考模式默认开启，默认强度 high。
+    expect(config.thinking).toBe(true);
+    expect(config.reasoningEffort).toBe('high');
+  });
+
+  it('reads the thinking toggle from overrides and environment', async () => {
+    dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'auraxis-thinking-'));
+    process.env.AURAXIS_HOME = dataDir;
+    await saveRuntimeConfig({ thinking: false });
+    expect((await loadRuntimeConfig()).thinking).toBe(false);
+    expect((await loadRuntimeConfig({ thinking: true })).thinking).toBe(true);
+    delete process.env.AURAXIS_HOME;
+    process.env.AURAXIS_THINKING = 'off';
+    expect((await loadRuntimeConfig()).thinking).toBe(false);
+    delete process.env.AURAXIS_THINKING;
+  });
 });

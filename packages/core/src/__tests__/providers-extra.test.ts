@@ -83,6 +83,21 @@ describe('provider response edge cases', () => {
     });
     expect(result.reasoning).toBe('think');
     expect(captured.output_config).toEqual({ effort: 'max' });
+    expect(captured.thinking).toEqual({ type: 'enabled', budget_tokens: 4096 });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: unknown, init?: RequestInit) => {
+        captured = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>;
+        return new Response(
+          JSON.stringify({ content: [{ type: 'text', text: 'ok' }], stop_reason: 'end_turn' }),
+          { status: 200 },
+        );
+      }),
+    );
+    await anthropic.chat({ messages: [{ role: 'user', content: 'x' }], thinking: false, stream: false });
+    expect(captured.thinking).toEqual({ type: 'disabled' });
+    expect(captured).not.toHaveProperty('output_config');
   });
 
   it('parses Gemini tool calls and rejects invalid JSON', async () => {

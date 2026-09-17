@@ -13,6 +13,7 @@ export interface AuraxisClientOptions {
   mode?: string;
   sandbox?: string;
   reasoningEffort?: string;
+  thinking?: boolean;
   toolChoice?: string;
   contextBudget?: number;
   theme?: string;
@@ -59,6 +60,7 @@ export class AuraxisClient {
     if (options.mode) args.push('--mode', options.mode);
     if (options.sandbox) args.push('--sandbox', options.sandbox);
     if (options.reasoningEffort) args.push('--reasoning-effort', options.reasoningEffort);
+    if (options.thinking !== undefined) args.push('--thinking', options.thinking ? 'on' : 'off');
     if (options.toolChoice) args.push('--tool-choice', options.toolChoice);
     if (options.contextBudget) args.push('--context-budget', String(options.contextBudget));
     if (options.theme) args.push('--theme', options.theme);
