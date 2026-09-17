@@ -74,10 +74,53 @@ const scenarios = [
     running: false,
     expanded: true,
   },
+  {
+    kind: 'transcript',
+    title: '对话区工具卡片',
+    entries: [
+      { type: 'user', text: '修一下温度转换的测试' },
+      { type: 'tool', name: 'Read', summary: 'file_path: tests/temperature.test.ts', status: 'done', duration: 2, output: ' 1| import { cToF } from "../src/temperature.ts";' },
+      { type: 'tool', name: 'Edit', summary: 'file_path: tests/temperature.test.ts', status: 'done', duration: 3 },
+      { type: 'tool', name: 'Bash', summary: 'node --test', status: 'error', error: '命令退出码 1', duration: 940, output: 'ERR_ASSERTION: expected -273.2 but got -273.1' },
+      { type: 'tool', name: 'Write', summary: 'file_path: tests/temperature.test.ts', status: 'done', duration: 4 },
+      { type: 'tool', name: 'Bash', summary: 'node --test', status: 'done', duration: 1180, output: 'tests 33\npass 33\nfail 0' },
+      { type: 'assistant', text: '33 项用例全部通过。' },
+    ],
+  },
 ];
 
 for (const scenario of scenarios) {
   captured = '';
+  if (scenario.kind === 'transcript') {
+    const isToolLike = (entry) => entry.type === 'tool' || entry.type === 'code_tool';
+    const children = scenario.entries.map((entry, index) => {
+      if (entry.type === 'user') return React.createElement(ui.UserBlock, { key: index, text: entry.text });
+      if (entry.type === 'assistant') return React.createElement(ui.AssistantBlock, { key: index, text: entry.text });
+      if (entry.type === 'system') return React.createElement(ui.SystemBlock, { key: index, text: entry.text });
+      const grouped = isToolLike(scenario.entries[index - 1]) || isToolLike(scenario.entries[index + 1]);
+      return React.createElement(ui.ToolBlock, {
+        key: index,
+        name: entry.name,
+        summary: entry.summary,
+        status: entry.status,
+        ok: entry.status !== 'error',
+        error: entry.error,
+        duration: entry.duration,
+        output: entry.output,
+        grouped,
+        first: !isToolLike(scenario.entries[index - 1]),
+        last: !isToolLike(scenario.entries[index + 1]),
+      });
+    });
+    const app = render(
+      React.createElement(ui.ThemeProvider, { theme: 'dark' }, React.createElement(React.Fragment, null, children)),
+      { stdout },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    app.unmount();
+    realWrite(`\n===== ${scenario.title} =====\n${captured}\n`);
+    continue;
+  }
   const panel = React.createElement(ui.ExecutionPanel, {
     items: scenario.items,
     running: scenario.running,

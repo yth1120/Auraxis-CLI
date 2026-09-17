@@ -80,6 +80,7 @@ function App({ options }: { options: CliOptions }) {
     Math.max(0, transcriptEntries.length - visibleWindow - controller.scrollOffset),
     Math.max(0, transcriptEntries.length - controller.scrollOffset),
   );
+  const isToolLike = (kind?: string) => kind === 'tool' || kind === 'code_tool';
   const currentTool = [...controller.activity].reverse().find((item) => item.status === 'running')?.name;
   const promptWidth = Math.max(20, (stdout.columns || 80) - 2);
 
@@ -104,6 +105,9 @@ function App({ options }: { options: CliOptions }) {
           {transcriptEntries.length > 0 ? (
             <Box flexDirection="column" marginTop={1} marginBottom={1}>
               {visibleEntries.map((item: any, index: number) => {
+                const prevToolLike = index > 0 && isToolLike(visibleEntries[index - 1]?.kind);
+                const nextToolLike = index + 1 < visibleEntries.length && isToolLike(visibleEntries[index + 1]?.kind);
+                const grouped = prevToolLike || nextToolLike;
                 switch (item.kind) {
                   case 'user':
                     return <UserBlock key={index} text={item.text} />;
@@ -122,6 +126,9 @@ function App({ options }: { options: CliOptions }) {
                         error={item.error}
                         duration={item.duration}
                         output={item.output}
+                        grouped={grouped}
+                        first={!prevToolLike}
+                        last={!nextToolLike}
                       />
                     );
                   case 'plan':
@@ -137,6 +144,9 @@ function App({ options }: { options: CliOptions }) {
                         ok={item.ok}
                         error={item.error}
                         duration={item.duration}
+                        grouped={grouped}
+                        first={!prevToolLike}
+                        last={!nextToolLike}
                       />
                     );
                   case 'error':

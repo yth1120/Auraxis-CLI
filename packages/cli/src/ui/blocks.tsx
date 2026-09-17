@@ -914,6 +914,9 @@ export function ToolBlock({
   error,
   duration,
   output,
+  first = false,
+  last = false,
+  grouped = false,
 }: {
   name: string;
   summary: string;
@@ -922,18 +925,27 @@ export function ToolBlock({
   error?: string;
   duration?: number;
   output?: string;
+  /** 是否为本组工具卡片的第一条。 */
+  first?: boolean;
+  /** 是否为本组工具卡片的最后一条。 */
+  last?: boolean;
+  /** 是否与其他工具卡片连成时间轴。 */
+  grouped?: boolean;
 }) {
   return (
-    <ToolStatusRow
-      name={name}
-      summary={summary}
-      status={status}
-      ok={ok}
-      error={error}
-      duration={duration}
-      output={output}
-      showOutput
-    />
+    <Box flexDirection="column" marginTop={grouped || first ? 0 : 1}>
+      <ToolStatusRow
+        name={name}
+        summary={summary}
+        status={status}
+        ok={ok}
+        error={error}
+        duration={duration}
+        output={output}
+        showOutput
+        timeline={grouped ? timelineNode(first, last) : undefined}
+      />
+    </Box>
   );
 }
 
@@ -1367,12 +1379,18 @@ export function CodeToolRow({
   ok,
   error,
   duration,
+  first = false,
+  last = false,
+  grouped = false,
 }: {
   name: string;
   status?: 'running' | 'done' | 'error' | 'aborted';
   ok?: boolean;
   error?: string;
   duration?: number;
+  first?: boolean;
+  last?: boolean;
+  grouped?: boolean;
 }) {
   return (
     <ToolStatusRow
@@ -1382,6 +1400,7 @@ export function CodeToolRow({
       error={error}
       duration={duration}
       compact
+      timeline={grouped ? timelineNode(first, last) : undefined}
     />
   );
 }
