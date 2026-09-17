@@ -38,6 +38,10 @@ export interface ActivityItem {
   error?: string;
   duration?: number;
   output?: string;
+  /** 该步骤开始的毫秒时间戳，用于执行视图的总耗时。 */
+  startedAt?: number;
+  /** 该步骤结束的毫秒时间戳。 */
+  finishedAt?: number;
 }
 
 export type ActiveCommandKey =

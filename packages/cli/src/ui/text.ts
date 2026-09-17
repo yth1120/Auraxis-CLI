@@ -35,3 +35,14 @@ export function truncateByWidth(value: string, maxWidth: number): string {
   }
   return result;
 }
+
+/** 执行视图的时间轴连接符。 */
+export function timelineNode(first: boolean, last: boolean): { node: string; prefix: string } {
+  const node = last ? '╰' : first ? '╭' : '├';
+  return { node: `${node}─`, prefix: last ? '  ' : '│ ' };
+}
+
+/** 执行视图的步数文案，例：`5 步 · 1 失败`。 */
+export function stepSummary(total: number, failed = 0): string {
+  return `${total} 步${failed > 0 ? ` · ${failed} 失败` : ''}`;
+}

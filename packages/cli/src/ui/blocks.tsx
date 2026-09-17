@@ -5,7 +5,7 @@ import type { ModelChoice, PermissionRequest, Plan, SkillRecord } from '@auraxis
 import { COMMAND_HINTS, commandHintLabel, type CommandHint } from './commands.js';
 import { HOME_COMMANDS, buildBlockTitle, shortenProjectPath } from './home.js';
 import { isDiffCodeBlock, parseInlineMarkdown, splitCodeBlocks } from './markdown.js';
-import { truncateByWidth } from './text.js';
+import { stepSummary, timelineNode, truncateByWidth } from './text.js';
 import type { ActiveCommand, ActivityItem, ChoiceOption, ChoicePickerState } from './terminal-model.js';
 
 type BorderStyle = 'round' | 'single' | 'double';
@@ -201,8 +201,19 @@ export function StatusBar({
   currentTool?: string;
 }) {
   const theme = useTheme();
+  const [since, setSince] = useState<number | null>(null);
+  useEffect(() => {
+    if (!running) {
+      setSince(null);
+      return;
+    }
+    setSince((value) => value ?? Date.now());
+    const timer = setInterval(() => setSince((value) => value ?? Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [running]);
   const permissionColor =
     permission === 'auto' ? theme.success : permission === 'plan' ? theme.plan : permission === 'ask' ? theme.warning : theme.info;
+  const elapsed = running && since ? Date.now() - since : 0;
   return (
     <Box flexDirection="column" marginTop={0}>
       <Text wrap="truncate">
@@ -215,7 +226,8 @@ export function StatusBar({
       </Text>
       {running ? (
         <Text color={theme.warning} wrap="truncate">
-          ● {currentTool || '思考中'} <Spinner />
+          <Spinner /> <Text color={theme.text}>{currentTool || '思考中'}</Text>
+          {elapsed > 1000 ? <Text color={theme.muted}> · {formatDuration(elapsed)}</Text> : null}
         </Text>
       ) : null}
     </Box>
@@ -271,6 +283,15 @@ function resolveToolStatus(
   return { kind, color, marker };
 }
 
+const OUTPUT_PREFIX = '⎿ ';
+const CODE_OUTPUT_PREFIX = '  ⎿ ';
+
+function outputBlockText(lines: string[], limit: number, limitHint: number): string {
+  const shown = lines.slice(0, limit).map((line) => `${OUTPUT_PREFIX}${truncateByWidth(line, 116)}`);
+  if (lines.length > limit) shown.push(`${OUTPUT_PREFIX}… 共 ${lines.length} 行 · Ctrl+O 展开至 ${limitHint} 行`);
+  return shown.join('\n');
+}
+
 function ToolStatusRow({
   name,
   summary,
@@ -282,6 +303,7 @@ function ToolStatusRow({
   showOutput = false,
   outputLimit = 3,
   compact = false,
+  timeline,
 }: {
   name: string;
   summary?: string;
@@ -293,6 +315,8 @@ function ToolStatusRow({
   showOutput?: boolean;
   outputLimit?: number;
   compact?: boolean;
+  /** 执行视图的时间轴连接符，提供时使用纵向引导图文排版。 */
+  timeline?: { node: string; prefix: string };
 }) {
   const theme = useTheme();
   const resolved = resolveToolStatus(theme, status, ok);
@@ -300,18 +324,33 @@ function ToolStatusRow({
   const detail = error || (trimmedSummary && trimmedSummary !== name ? trimmedSummary : '');
   const outputLines = output ? output.split(/\r?\n/) : [];
   const safeLimit = Math.max(1, Math.floor(outputLimit));
-  const visibleOutput = showOutput ? outputLines.slice(0, safeLimit) : [];
+  const hasOutput = showOutput && outputLines.length > 0;
+  const detailColor =
+    resolved.kind === 'error' ? theme.danger : resolved.kind === 'done' ? theme.success : theme.muted;
+  const detailDim = resolved.kind === 'done' || resolved.kind === 'idle';
+  const nameColor = resolved.kind === 'running' ? theme.text : resolved.color;
+  const nameBold = resolved.kind === 'running' || resolved.kind === 'error';
   return (
-    <Box flexDirection="column" marginTop={compact ? 0 : 1}>
+    <Box flexDirection="column" marginTop={compact || timeline ? 0 : 1}>
       <Box flexDirection="row" flexShrink={0}>
-        <Text color={resolved.color} bold wrap="truncate">
-          {resolved.marker} {toolIcon(name)} {name}
+        {timeline ? <Text color={theme.border}>{timeline.node} </Text> : null}
+        {resolved.kind === 'running' ? (
+          <Box marginRight={1}>
+            <Spinner />
+          </Box>
+        ) : (
+          <Text color={resolved.color} bold={nameBold} wrap="truncate">
+            {resolved.marker}{' '}
+          </Text>
+        )}
+        <Text color={nameColor} bold={nameBold} wrap="truncate">
+          {toolIcon(name)} {name}
         </Text>
         <Box flexGrow={1} flexShrink={1}>
           {detail ? (
             <Text
               color={resolved.kind === 'error' ? theme.danger : theme.muted}
-              dimColor={resolved.kind !== 'error'}
+              dimColor={detailDim}
               wrap="truncate"
             >
               {' '}
@@ -319,17 +358,19 @@ function ToolStatusRow({
             </Text>
           ) : null}
         </Box>
-        <Text color={theme.muted}>{formatDuration(duration)}</Text>
+        <Text color={theme.muted} dimColor>
+          {formatDuration(duration)}
+        </Text>
       </Box>
-      {visibleOutput.length > 0 ? (
-        <Box marginLeft={2}>
+      {hasOutput ? (
+        <Box flexDirection="row" flexShrink={0}>
+          <Text color={theme.border}>{timeline ? timeline.prefix : '  '}</Text>
           <Text
             color={resolved.kind === 'error' ? theme.danger : theme.muted}
-            dimColor={resolved.kind !== 'error'}
+            dimColor={resolved.kind === 'done'}
             wrap="wrap"
           >
-            {visibleOutput.map((line) => truncateByWidth(line, 120)).join('\n')}
-            {outputLines.length > safeLimit ? `\n… 仅显示前 ${safeLimit} 行` : ''}
+            {outputBlockText(outputLines, safeLimit, 12)}
           </Text>
         </Box>
       ) : null}
@@ -339,10 +380,14 @@ function ToolStatusRow({
 
 function ActivityRow({
   item,
+  first,
+  last,
   showOutput,
   outputLimit = 3,
 }: {
   item: ActivityItem;
+  first: boolean;
+  last: boolean;
   showOutput: boolean;
   outputLimit?: number;
 }) {
@@ -356,6 +401,7 @@ function ActivityRow({
       output={item.output}
       showOutput={showOutput}
       outputLimit={outputLimit}
+      timeline={timelineNode(first, last)}
     />
   );
 }
@@ -370,13 +416,28 @@ export function ExecutionPanel({
   expanded?: boolean;
 }) {
   const theme = useTheme();
+  const [tick, setTick] = useState(0);
+  const hasRunningItem = items.some((item) => item.status === 'running');
+  useEffect(() => {
+    if (!hasRunningItem) return;
+    const timer = setInterval(() => setTick((value) => value + 1), 1000);
+    return () => clearInterval(timer);
+  }, [hasRunningItem]);
   if (!items.length) return null;
   const activeCount = items.filter((item) => item.status === 'running').length;
   const errorCount = items.filter((item) => item.status === 'error').length;
-  const visibleItems = expanded ? items : items.slice(-8);
+  const startTimes = items.map((item) => item.startedAt).filter((value): value is number => typeof value === 'number');
+  const finishTimes = items.map((item) => item.finishedAt).filter((value): value is number => typeof value === 'number');
+  const live = running || activeCount > 0;
+  const earliestStart = startTimes.length > 0 ? Math.min(...startTimes) : 0;
+  const latestFinish = finishTimes.length > 0 ? Math.max(...finishTimes) : 0;
+  const endTime = live ? Date.now() : latestFinish || Date.now();
+  const elapsed = earliestStart > 0 ? Math.max(0, endTime - earliestStart) : 0;
+  void tick;
+  const visibleItems = expanded ? items : items.slice(-6);
   const hiddenCount = items.length - visibleItems.length;
   const headingColor = running ? theme.warning : errorCount ? theme.danger : theme.success;
-  const heading = running ? '执行中' : '执行';
+  const heading = running ? '执行中' : errorCount ? '执行失败' : '已完成';
   const headingMarker = running ? '●' : errorCount ? '✗' : '✓';
   return (
     <Box
@@ -389,27 +450,29 @@ export function ExecutionPanel({
         <Text color={headingColor} bold wrap="truncate">
           {headingMarker} {heading}
         </Text>
-        {activeCount > 0 ? <Text color={theme.warning}> · {activeCount} 运行中</Text> : null}
-        {errorCount > 0 ? <Text color={theme.danger}> · {errorCount} 失败</Text> : null}
         <Text color={theme.muted} wrap="truncate">
           {' '}
-          · {items.length} 步
+          · {stepSummary(items.length, errorCount)}
+          {elapsed > 0 ? ` · ${formatDuration(elapsed)}` : ''}
         </Text>
+        {hiddenCount > 0 ? (
+          <Text color={theme.muted} dimColor wrap="truncate">
+            {'  '}
+            {expanded ? 'Ctrl+O 收起' : `+${hiddenCount} 步 · Ctrl+O`}
+          </Text>
+        ) : null}
       </Box>
       <Box flexDirection="column">
         {visibleItems.map((item, index) => (
           <ActivityRow
             key={item.id || `${item.kind}-${item.name}-${index}`}
             item={item}
+            first={index === 0}
+            last={index === visibleItems.length - 1}
             showOutput={expanded || item.status === 'error'}
             outputLimit={expanded ? 12 : 3}
           />
         ))}
-        {hiddenCount > 0 ? (
-          <Text color={theme.muted} dimColor>
-            … 更早 {hiddenCount} 步 · Ctrl+O 展开
-          </Text>
-        ) : null}
       </Box>
     </Box>
   );
@@ -1256,6 +1319,7 @@ export function toolIcon(name: string): string {
 export function CodeOutputBlock({ lines, running }: { lines: string[]; running: boolean }) {
   const theme = useTheme();
   const tail = lines.slice(-10);
+  const hidden = lines.length - tail.length;
   return (
     <Box
       flexDirection="column"
@@ -1264,16 +1328,33 @@ export function CodeOutputBlock({ lines, running }: { lines: string[]; running: 
       backgroundColor={theme.surfaceAlt}
     >
       <Box flexDirection="row" flexShrink={0}>
-        <Text color={running ? theme.warning : theme.success} bold>
-          {running ? '● Code' : '✓ Code'}
+        <Text color={theme.info} bold>
+          {'▸ '}
+          {toolIcon('RunCode')} Code Mode
         </Text>
-        {running ? <Text color={theme.warning}>{' '}<Spinner /></Text> : null}
+        {hidden > 0 ? (
+          <Text color={theme.muted} dimColor wrap="truncate">
+            {' '}
+            · 前 {hidden} 行已折叠
+          </Text>
+        ) : null}
+        <Box flexGrow={1} />
+        {running ? (
+          <Box marginRight={1}>
+            <Spinner />
+          </Box>
+        ) : (
+          <Text color={theme.success}>✓</Text>
+        )}
       </Box>
       <Box flexDirection="column">
         {tail.map((line, index) => (
-          <Text key={index} color={theme.text} wrap="wrap">
-            {line}
-          </Text>
+          <Box key={index} flexDirection="row" flexShrink={0}>
+            <Text color={theme.border}>{CODE_OUTPUT_PREFIX}</Text>
+            <Text color={theme.text} wrap="wrap">
+              {truncateByWidth(line, 116)}
+            </Text>
+          </Box>
         ))}
       </Box>
     </Box>

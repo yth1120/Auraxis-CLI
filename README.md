@@ -48,6 +48,12 @@ npm run e2e:lsp               # 使用 typescript-language-server 验证定义/�
 npm run e2e:container         # 使用 Docker 容器沙箱执行隔离命令
 ```
 
+执行视图的排版快照（把时间轴、状态、折叠输出直接画到终端，便于目视检查）：
+
+```bash
+npm run ui:snapshot
+```
+
 需要提供 DeepSeek API Key：
 
 ```powershell

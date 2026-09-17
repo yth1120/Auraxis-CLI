@@ -58,8 +58,9 @@ auraxis --doctor
 - `/status` 查看模型、沙箱、权限、分支、会话和项目路径
 - 启动首页提供模型、审批、思考、MCP 与帮助快捷入口
 - 会话创建、保存与恢复
-- 执行视图按工具状态流展示，输出默认折叠并可 `Ctrl+O` 展开；工具与
-  Code Mode 子调用统一图标、状态和耗时
+- 执行视图带时间轴引导线：每步显示工具图标、关键参数、耗时与状态
+  （运行中转圈动画 / 成功 / 失败），表头汇总「步数 · 总耗时」，输出默认折叠并
+  可 `Ctrl+O` 展开；工具与 Code Mode 子调用统一图标、状态和耗时
 - AGENTS.md 分层规则注入；Write/Edit 自动快照 + `Undo` 工具恢复
 - Hooks 生命周期：`session_start` / `user_prompt_submit` / `pre_tool_use` /
   `post_tool_use` / `stop`，支持 JSON 协议、阻断、超时与敏感环境变量隔离；

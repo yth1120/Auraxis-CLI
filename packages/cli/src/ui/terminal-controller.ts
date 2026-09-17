@@ -1060,6 +1060,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
               name: event.toolName,
               status: 'running',
               summary: summarizeToolInput(event.toolName, event.input),
+              startedAt: Date.now(),
             });
           }
           break;
@@ -1077,6 +1078,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
               status: 'done',
               duration: event.durationMs,
               output: event.outputPreview,
+              finishedAt: Date.now(),
             });
           }
           break;
@@ -1093,6 +1095,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
               name: event.toolName,
               status: 'error',
               error: event.error,
+              finishedAt: Date.now(),
             });
           }
           break;
@@ -1404,6 +1407,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
           status,
           duration: call.durationMs,
           error: call.error,
+          ...(status === 'running' ? { startedAt: Date.now() } : { finishedAt: Date.now() }),
         });
         const nextItem: UiItem = {
           kind: 'code_tool',
@@ -1434,7 +1438,13 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
             switch (event.type) {
               case 'code_start':
                 addItem({ kind: 'code', text: 'Code Mode', codeRunning: true, lines: [] });
-                updateActivity({ id: 'code-main', kind: 'code', name: 'Code Mode', status: 'running' });
+                updateActivity({
+                  id: 'code-main',
+                  kind: 'code',
+                  name: 'Code Mode',
+                  status: 'running',
+                  startedAt: Date.now(),
+                });
                 break;
               case 'code_log':
                 setEntries((prev) => {
@@ -1456,6 +1466,7 @@ export function useTerminalController({ options }: { options: CliOptions }): Ter
                   kind: 'code',
                   name: 'Code Mode',
                   status: 'done',
+                  finishedAt: Date.now(),
                   output:
                     `exit=${event.result.exitCode} · tools=${event.result.subCalls.length} · ` +
                     `timedOut=${event.result.timedOut}`,

@@ -36,6 +36,7 @@
     "e2e:native": "node scripts/e2e-native.mjs",
     "e2e:app-server": "node scripts/e2e-app-server.mjs",
     "e2e:sdk": "node scripts/e2e-sdk.mjs",
+    "ui:snapshot": "node scripts/ui-snapshot.mjs",
     "test:practical": "npm run build -w @auraxis/core && npm run build -w @auraxis/cli && node scripts/practical-matrix.mjs",
     "check:native": "npm run build:native && npm run e2e:native",
     "check:integration": "npm run e2e:lsp && npm run e2e:live && npm run e2e:container",
