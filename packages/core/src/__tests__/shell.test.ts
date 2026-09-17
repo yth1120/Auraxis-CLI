@@ -48,7 +48,11 @@ describe('shell tool', () => {
     const pending = bashTool({ command: 'env' }, context());
     await vi.waitFor(() => expect(spawnMock.spawn).toHaveBeenCalled());
     const callArgs = spawnMock.spawn.mock.calls[0];
-    const options = (callArgs[1] ?? callArgs[2]) as { env?: Record<string, string | undefined> };
+    // Windows 走 spawn(command, options)，类 Unix 走 spawn(shell, args, options)，
+    // 这里取参数列表里真正的 options 对象。
+    const options = (callArgs.find(
+      (arg) => arg && typeof arg === 'object' && !Array.isArray(arg),
+    ) ?? {}) as { env?: Record<string, string | undefined> };
     const env = options.env ?? {};
     expect(env.DEEPSEEK_API_KEY).toBeUndefined();
     expect(env.MY_APP_TOKEN).toBeUndefined();
