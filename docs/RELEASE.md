@@ -26,18 +26,24 @@ Release workflow 会先在 Linux 上运行完整检查，再依次发布：
 
 推荐使用 **Trusted Publishing（OIDC）**，不需要任何长期 token：
 
-1. 首次发布前，包在 npm 上还不存在，Trusted Publisher 只能配置在已发布的包上，
-   因此第一次发布需要一个一次性凭据：在 npm 生成 Granular Access Token，
-   勾选 **Bypass two-factor authentication (2FA)**，Packages and scopes 选
-   `@auraxis` 的 Read and write，Organizations 选 `auraxis` 的 Read and write。
-2. 把这个 token 配到仓库 Secret `NPM_TOKEN`，重跑 Release workflow 完成首次发布。
-3. 到 npm 包设置页（`@auraxis/core`、`@auraxis/cli` 各一次）→ **Trusted Publisher**
+1. 首次发布：包还不存在于 npm，而 Trusted Publisher 只能配置在已发布的包上。
+   因此第一次在本机完成，凭据不经过 CI、2FA 验证码由本人输入：
+
+   ```bash
+   npm login --auth-type=web
+   npm run release:bootstrap            # 状态检查
+   npm run release:bootstrap -- --publish   # 发布 core 与 cli
+   ```
+
+   （CI 里也能用一次性 Granular token 完成首次发布，但那需要 Bypass 2FA 的长效凭据，
+   属于安全上的次选。）
+2. 到 npm 包设置页（`@auraxis/core`、`@auraxis/cli` 各一次）→ **Trusted Publisher**
    → 选 GitHub Actions，填：
    - Organization or user：`yth1120`
    - Repository：`Auraxis-CLI`
    - Workflow filename：`release.yml`
    - 勾选允许 `npm publish`（默认只允许 staged publish）
-4. 删除仓库 Secret `NPM_TOKEN`，并在 npm 上 Revoke 那个一次性 token。
+3. 确认仓库里没有残留的 `NPM_TOKEN` Secret（避免回退到 token 路径）。
    之后每次 Release 都用 OIDC 短时令牌发布，无需轮换任何凭据。
 
 发布路径由 workflow 自动选择：存在 `NPM_TOKEN` 时用它，否则用 OIDC。

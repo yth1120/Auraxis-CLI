@@ -24,6 +24,7 @@
     "pack:check": "npm pack -w @auraxis/core --dry-run && npm pack -w @auraxis/cli --dry-run",
     "version:check": "node scripts/check-version.mjs",
     "lock:check": "node scripts/check-lockfile.mjs",
+    "release:bootstrap": "node scripts/bootstrap-publish.mjs",
     "typecheck": "npm run typecheck -w @auraxis/core && npm run typecheck -w @auraxis/cli",
     "test": "npm run test -w @auraxis/core && npm run test -w @auraxis/cli",
     "coverage": "npm run coverage -w @auraxis/core && npm run coverage -w @auraxis/cli",
