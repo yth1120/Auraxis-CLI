@@ -50,6 +50,11 @@ Release workflow 会先在 Linux 上运行完整检查，再依次发布：
 原生二进制上传偶发被 GitHub 侧 500（`Error saving asset`）拒绝时会自动重试 3 次，
 且不会阻断 npm 发布。
 
+注意：`SHA256SUMS.txt` 与二进制必须来自**同一次构建**。如果单独重传了某个平台的
+二进制（例如本机 `gh release upload --clobber` 补传），请连同 `SHA256SUMS.txt` 一起
+重传，否则校验和与产物不匹配。CI 每次重跑都会重新 `bun build --compile`，字节可能
+与既有 Release 上的产物不同。
+
 原生二进制由 `bun build --compile` 在 CI 中交叉编译，上传到同一个 GitHub
 Release。npm 包只包含 `main.js` / `single.js`，原生文件放在
 `packages/cli/native/`，不会进入 npm tarball。
