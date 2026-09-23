@@ -56,6 +56,11 @@ DeepSeek 官方接口同步 + Agent 执行视图重做。老配置无需修改�
   `/bin/sh`（最小容器镜像常见），不再直接 ENOENT；跨平台测试改为断言真实的
   spawn 形态，修正了在 Linux CI 上必然失败、在 Windows 上被跳过的错误断言
 
+- `@auraxis/cli` 补齐 `fast-glob` / `typescript5` 运行依赖，修复 npm 全局安装后
+  启动报 `ERR_MODULE_NOT_FOUND` 的问题
+- 修正 `@auraxis/cli` 的 `bin` 路径，确保 `npm install -g @auraxis/cli` 会创建
+  `auraxis` 可执行命令，而不是被 npm 规范化时移除
+
 ### 说明
 
 - 版本号首次统一：根包、`@auraxis/core`、`@auraxis/cli` 与源码内版本常量同为

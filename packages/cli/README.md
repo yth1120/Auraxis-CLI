@@ -4,6 +4,14 @@ GitHub: [yth1120/Auraxis-CLI](https://github.com/yth1120/Auraxis-CLI)
 
 终端交互式 Auraxis Agent。
 
+## 安装
+
+```bash
+npm install -g @auraxis/cli
+# 或
+npx -y @auraxis/cli
+```
+
 ```bash
 auraxis
 auraxis --no-banner

@@ -5,7 +5,7 @@
   "license": "MIT",
   "type": "module",
   "bin": {
-    "auraxis": "./bin/auraxis.js"
+    "auraxis": "bin/auraxis.js"
   },
   "main": "./dist/main.js",
   "files": [

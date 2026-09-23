@@ -15,6 +15,22 @@ Bun 原生二进制。
 
 ## 快速开始
 
+### 安装（用户）
+
+要求 Node.js 22.12+：
+
+```bash
+# 全局安装，之后可直接使用 auraxis
+npm install -g @auraxis/cli
+auraxis --version
+
+# 或不安装，直接运行
+npx -y @auraxis/cli --version
+npx -y @auraxis/cli
+```
+
+### 从源码运行（开发）
+
 ```bash
 npm install
 npm run build
@@ -58,7 +74,7 @@ npm run ui:snapshot
 
 ```powershell
 $env:DEEPSEEK_API_KEY = "sk-..."
-npx auraxis
+npx -y @auraxis/cli
 ```
 
 或在项目根目录创建 `.env`：
