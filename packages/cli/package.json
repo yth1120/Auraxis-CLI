@@ -30,9 +30,11 @@
     "coverage:gate": "vitest run --coverage"
   },
   "dependencies": {
+    "fast-glob": "^3.3.3",
     "ink": "^7.1.1",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "typescript5": "npm:typescript@^5.9.3"
   },
   "devDependencies": {
     "@auraxis/core": "1.1.0",
