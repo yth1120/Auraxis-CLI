@@ -1,7 +1,7 @@
 # Auraxis CLI v1.1.0
 
 GitHub: [yth1120/Auraxis-CLI](https://github.com/yth1120/Auraxis-CLI)
-
+<img width="1080" height="547" alt="640 (1)" src="https://github.com/user-attachments/assets/d358fcf8-c28b-4af8-92c8-644778745d6b" />
 [![CI](https://github.com/yth1120/Auraxis-CLI/actions/workflows/ci.yml/badge.svg)](https://github.com/yth1120/Auraxis-CLI/actions/workflows/ci.yml)
 
 纯本地运行的 Auraxis Agent 命令行工作台。
